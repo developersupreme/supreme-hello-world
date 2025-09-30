@@ -62,8 +62,8 @@ export function useSimpleCreditSystem(config: CreditSystemConfig = {}) {
   const accessTokenRef = useRef<string | null>(null)
   const refreshTokenRef = useRef<string | null>(null)
 
-  const apiBaseUrl = config.apiBaseUrl || 'http://127.0.0.1:8000/api/secure-credits/jwt'
-  const authUrl = config.authUrl || 'http://127.0.0.1:8000/api/jwt'
+  const apiBaseUrl = config.apiBaseUrl || import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/secure-credits/jwt'
+  const authUrl = config.authUrl || import.meta.env.VITE_AUTH_URL || 'http://127.0.0.1:8000/api/jwt'
 
   // Retry interval reference
   const retryIntervalRef = useRef<NodeJS.Timeout | null>(null)
