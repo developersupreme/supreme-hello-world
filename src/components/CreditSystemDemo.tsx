@@ -109,6 +109,10 @@ export default function CreditSystemDemo() {
     const result = await spendCredits(amount, 'Test spend from Lovable app')
     if (result.success) {
       console.log(`Spent ${amount} credits. New balance: ${result.balance}`)
+      // Automatically refresh transaction history if it's visible
+      if (showHistory) {
+        await handleGetHistory()
+      }
     }
   }
 
@@ -117,6 +121,10 @@ export default function CreditSystemDemo() {
     const result = await addCredits(amount, 'bonus', 'Test bonus credits')
     if (result.success) {
       console.log(`Added ${amount} credits. New balance: ${result.balance}`)
+      // Automatically refresh transaction history if it's visible
+      if (showHistory) {
+        await handleGetHistory()
+      }
     }
   }
 
@@ -129,10 +137,17 @@ export default function CreditSystemDemo() {
     }
   }
 
+  // Auto-refresh history when it becomes visible
+  useEffect(() => {
+    if (showHistory && isAuthenticated) {
+      handleGetHistory()
+    }
+  }, [showHistory, isAuthenticated])
+
   return (
     <div className="container mx-auto p-6 max-w-6xl">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Supreme AI Credit System Demo</h1>
+        <h1 className="text-3xl font-bold mb-2">Supreme AI Credit System</h1>
         <div className="flex gap-2">
           <Badge variant={isEmbedded ? 'secondary' : 'default'}>
             Mode: {isEmbedded ? 'Embedded (iframe)' : 'Standalone'}
@@ -244,7 +259,7 @@ export default function CreditSystemDemo() {
                     )}
                   </Button>
 
-                  <div className="w-full space-y-2 text-sm text-muted-foreground">
+                  <div className="w-full space-y-2 text-sm text-muted-foreground hidden">
                     <p className="font-medium">Available users:</p>
                     <ul className="list-disc list-inside space-y-1">
                       <li>admin@supremeopti.com</li>
@@ -375,13 +390,23 @@ export default function CreditSystemDemo() {
                     <History className="h-5 w-5" />
                     Transaction History
                   </span>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setShowHistory(false)}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={handleGetHistory}
+                      disabled={loading}
+                    >
+                      <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setShowHistory(false)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -403,7 +428,8 @@ export default function CreditSystemDemo() {
                           {new Date(transaction.created_at).toLocaleString()}
                         </TableCell>
                         <TableCell>
-                          <Badge variant={transaction.type === 'spend' ? 'destructive' : 'default'}>
+                          <Badge variant={transaction.type === 'spend' || transaction.type === 'deduct' ? 'destructive' : 'default'}
+                                 className={transaction.type === 'spend' || transaction.type === 'deduct' ? '' : 'bg-green-500 hover:bg-green-600'}>
                             {transaction.type}
                           </Badge>
                         </TableCell>
