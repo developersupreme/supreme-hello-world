@@ -37,6 +37,7 @@ export default function CreditSystemDemo() {
   const [showPassword, setShowPassword] = useState(false)
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
 
   // Clear any invalid session data on mount
   useEffect(() => {
@@ -166,9 +167,17 @@ export default function CreditSystemDemo() {
             <CardDescription>
               {isEmbedded ? (
                 <>
-                  Authentication is handled by the parent application.
+                  <span className="text-xs text-muted-foreground hidden">
+                    Authentication is handled by the parent application.
+                  </span>
                   <br />
-                  <span className="text-xs text-muted-foreground">Getting credentials from Laravel session...</span>
+                  <span className="text-xs text-muted-foreground">
+                    Getting credentials from Laravel session...
+                  </span>
+                  <br />
+                  <span className="text-xs text-yellow-600 hidden">
+                    Will retry every 15 seconds if not received
+                  </span>
                 </>
               ) : (
                 'Enter your credentials to access the credit system'
@@ -423,7 +432,7 @@ export default function CreditSystemDemo() {
         </div>
       )}
 
-      <div className="mt-6 text-center text-sm text-muted-foreground">
+      <div className="mt-6 text-center text-sm text-muted-foreground hidden">
         Open browser console to see detailed responses
       </div>
     </div>

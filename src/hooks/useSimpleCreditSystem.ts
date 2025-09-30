@@ -65,6 +65,10 @@ export function useSimpleCreditSystem(config: CreditSystemConfig = {}) {
   const apiBaseUrl = config.apiBaseUrl || 'http://127.0.0.1:8000/api/secure-credits/jwt'
   const authUrl = config.authUrl || 'http://127.0.0.1:8000/api/jwt'
 
+  // Retry interval reference
+  const retryIntervalRef = useRef<NodeJS.Timeout | null>(null)
+  const retryCountRef = useRef(0)
+
   // Check if we're in an iframe (only once on mount)
   useEffect(() => {
     const inIframe = window.self !== window.top
@@ -109,6 +113,44 @@ export function useSimpleCreditSystem(config: CreditSystemConfig = {}) {
           timestamp: Date.now()
         }, '*')
       }, 500)
+
+      // Set up retry mechanism - if not authenticated after 15 seconds, reload iframe
+      retryIntervalRef.current = setInterval(() => {
+        if (!accessTokenRef.current && retryCountRef.current < 3) {
+          retryCountRef.current++
+          console.log(`⚠️ JWT not received, retrying... (attempt ${retryCountRef.current}/3)`)
+
+          // Request JWT token again
+          window.parent.postMessage({
+            type: 'REQUEST_JWT_TOKEN',
+            timestamp: Date.now()
+          }, '*')
+
+          // If still no token after 3 attempts, request parent to reload iframe
+          if (retryCountRef.current >= 3) {
+            console.error('❌ Failed to receive JWT after 3 attempts, requesting iframe reload...')
+            window.parent.postMessage({
+              type: 'RELOAD_IFRAME_REQUEST',
+              reason: 'JWT_NOT_RECEIVED',
+              timestamp: Date.now()
+            }, '*')
+          }
+        } else if (accessTokenRef.current) {
+          // Token received, clear the interval
+          if (retryIntervalRef.current) {
+            clearInterval(retryIntervalRef.current)
+            retryIntervalRef.current = null
+            console.log('✅ JWT received, stopping retry mechanism')
+          }
+        }
+      }, 15000) // Check every 15 seconds
+    }
+
+    // Cleanup
+    return () => {
+      if (retryIntervalRef.current) {
+        clearInterval(retryIntervalRef.current)
+      }
     }
   }, []) // Empty dependency array - runs only once
 
@@ -151,6 +193,14 @@ export function useSimpleCreditSystem(config: CreditSystemConfig = {}) {
 
           setUser(event.data.user)
           setIsAuthenticated(true)
+
+          // Clear retry mechanism since we got the token
+          if (retryIntervalRef.current) {
+            clearInterval(retryIntervalRef.current)
+            retryIntervalRef.current = null
+            retryCountRef.current = 0
+            console.log('✅ JWT received, stopped retry mechanism')
+          }
 
           // Notify parent that credit system is ready
           window.parent.postMessage({
