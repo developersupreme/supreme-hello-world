@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Shield, TrendingUp, Award } from "lucide-react";
+import { Link } from "react-router-dom";
 
 const Index = () => {
   return (
@@ -22,14 +23,16 @@ const Index = () => {
         </p>
         
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Button 
-            size="lg" 
-            className="bg-gradient-primary hover:opacity-90 shadow-premium text-lg px-8"
-          >
-            Get Started
-          </Button>
-          <Button 
-            size="lg" 
+          <Link to="/credits">
+            <Button
+              size="lg"
+              className="bg-gradient-primary hover:opacity-90 shadow-premium text-lg px-8"
+            >
+              Get Started
+            </Button>
+          </Link>
+          <Button
+            size="lg"
             variant="outline"
             className="text-lg px-8 border-2"
           >
