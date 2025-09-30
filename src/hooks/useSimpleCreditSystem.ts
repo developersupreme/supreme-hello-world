@@ -73,9 +73,37 @@ export function useSimpleCreditSystem(config: CreditSystemConfig = {}) {
     if (inIframe) {
       console.log('Running in embedded mode (iframe)')
 
-      // Request JWT token from parent after a short delay
+      // Clear ALL previous session data immediately
+      console.log('Clearing all previous session data...')
+
+      // Clear sessionStorage
+      sessionStorage.removeItem('supreme_access_token')
+      sessionStorage.removeItem('supreme_refresh_token')
+      sessionStorage.removeItem('supreme_user')
+
+      // Clear localStorage (in case anything was stored there)
+      localStorage.removeItem('supreme_access_token')
+      localStorage.removeItem('supreme_refresh_token')
+      localStorage.removeItem('supreme_user')
+
+      // Clear any cookies (if applicable)
+      document.cookie.split(";").forEach(function(c) {
+        if (c.includes('supreme')) {
+          document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/")
+        }
+      })
+
+      // Reset all state
+      accessTokenRef.current = null
+      refreshTokenRef.current = null
+      setIsAuthenticated(false)
+      setUser(null)
+      setBalance(0)
+      setError(null)
+
+      // Request JWT token from parent after clearing
       setTimeout(() => {
-        console.log('Requesting JWT token from parent...')
+        console.log('Requesting fresh JWT token from parent...')
         window.parent.postMessage({
           type: 'REQUEST_JWT_TOKEN',
           timestamp: Date.now()
@@ -96,7 +124,23 @@ export function useSimpleCreditSystem(config: CreditSystemConfig = {}) {
       if (event.data && event.data.type === 'JWT_TOKEN_RESPONSE') {
         console.log('Received JWT token from parent:', event.data)
 
-        if (event.data.token && !accessTokenRef.current) {
+        if (event.data.token) {
+          // First, clear everything to ensure no stale data
+          console.log('Clearing old session before setting new JWT...')
+
+          // Clear storage
+          sessionStorage.clear()
+          localStorage.removeItem('supreme_access_token')
+          localStorage.removeItem('supreme_refresh_token')
+          localStorage.removeItem('supreme_user')
+
+          // Reset all state
+          setIsAuthenticated(false)
+          setUser(null)
+          setBalance(0)
+          setError(null)
+
+          // Now set the new values
           accessTokenRef.current = event.data.token
           refreshTokenRef.current = event.data.refreshToken
 
@@ -116,6 +160,7 @@ export function useSimpleCreditSystem(config: CreditSystemConfig = {}) {
           }, '*')
 
           toast.success(`Authenticated as ${event.data.user.email}`)
+          console.log('✓ Fresh authentication complete for:', event.data.user.email)
         } else if (event.data.error) {
           console.error('Failed to get JWT token:', event.data.error)
           setError(event.data.error)
@@ -134,13 +179,25 @@ export function useSimpleCreditSystem(config: CreditSystemConfig = {}) {
             }
             break
           case 'CLEAR_STORAGE':
-            console.log('Parent requested storage clear')
-            sessionStorage.clear()
+          case 'CLEAR_SESSION':
+            console.log('Parent requested session/storage clear')
+            // Clear all stored authentication data
+            sessionStorage.removeItem('supreme_access_token')
+            sessionStorage.removeItem('supreme_refresh_token')
+            sessionStorage.removeItem('supreme_user')
+            localStorage.removeItem('supreme_access_token')
+            localStorage.removeItem('supreme_refresh_token')
+            localStorage.removeItem('supreme_user')
+
+            // Clear refs and state
             accessTokenRef.current = null
             refreshTokenRef.current = null
             setIsAuthenticated(false)
             setUser(null)
             setBalance(0)
+            setError(null)
+
+            console.log('✓ Session cleared successfully')
             break
           case 'GET_STATUS':
             window.parent.postMessage({
@@ -162,8 +219,14 @@ export function useSimpleCreditSystem(config: CreditSystemConfig = {}) {
     }
   }, [isEmbedded, isAuthenticated, user, balance])
 
-  // Load tokens from sessionStorage on mount (works in both modes now)
+  // Load tokens from sessionStorage on mount (only in standalone mode)
   useEffect(() => {
+    // Skip session restoration in embedded mode - parent will provide correct user
+    if (isEmbedded) {
+      console.log('Embedded mode - skipping session restoration, waiting for parent')
+      return
+    }
+
     try {
       const savedAccessToken = sessionStorage.getItem('supreme_access_token')
       const savedRefreshToken = sessionStorage.getItem('supreme_refresh_token')
@@ -186,7 +249,7 @@ export function useSimpleCreditSystem(config: CreditSystemConfig = {}) {
     } catch (error) {
       console.error('Error loading saved session:', error)
     }
-  }, [])
+  }, [isEmbedded])
 
   const login = useCallback(async (email: string, password: string): Promise<AuthResult> => {
     setLoading(true)
