@@ -122,11 +122,18 @@ export default function CreditSystemDemo() {
 
   const handleSpendCredits = async (e?: React.FormEvent) => {
     e?.preventDefault()
-    const amount = parseInt(spendAmount) || 10
-    const description = spendDescription || 'Credit spend from Lovable app'
 
-    if (amount <= 0) {
-      toast.error('Please enter a valid amount')
+    // Check if amount field is empty
+    if (!spendAmount || spendAmount.trim() === '') {
+      toast.error('Please enter an amount to spend')
+      return
+    }
+
+    const amount = parseInt(spendAmount)
+
+    // Validate numeric value
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid positive amount')
       return
     }
 
@@ -134,6 +141,8 @@ export default function CreditSystemDemo() {
       toast.error('Insufficient balance')
       return
     }
+
+    const description = spendDescription.trim() || 'Credit spend from Lovable app'
 
     const result = await spendCredits(amount, description)
     if (result.success) {
@@ -150,13 +159,22 @@ export default function CreditSystemDemo() {
 
   const handleAddCredits = async (e?: React.FormEvent) => {
     e?.preventDefault()
-    const amount = parseInt(addAmount) || 50
-    const description = addDescription || 'Credit addition from Lovable app'
 
-    if (amount <= 0) {
-      toast.error('Please enter a valid amount')
+    // Check if amount field is empty
+    if (!addAmount || addAmount.trim() === '') {
+      toast.error('Please enter an amount to add')
       return
     }
+
+    const amount = parseInt(addAmount)
+
+    // Validate numeric value
+    if (isNaN(amount) || amount <= 0) {
+      toast.error('Please enter a valid positive amount')
+      return
+    }
+
+    const description = addDescription.trim() || 'Credit addition from Lovable app'
 
     const result = await addCredits(amount, addType, description)
     if (result.success) {
