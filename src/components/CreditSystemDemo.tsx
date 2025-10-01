@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSimpleCreditSystem, type Transaction } from '@/hooks/useSimpleCreditSystem'
+import { toast } from 'sonner'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,6 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Textarea } from '@/components/ui/textarea'
 import {
   Table,
   TableBody,
@@ -36,9 +39,18 @@ export default function CreditSystemDemo() {
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([])
-  const [showHistory, setShowHistory] = useState(false)
+  const [showHistory, setShowHistory] = useState(true)  // Changed to true to always show
   const [retryCount, setRetryCount] = useState(0)
   const [balanceLoaded, setBalanceLoaded] = useState(false)
+  const [historyRefreshing, setHistoryRefreshing] = useState(false)
+  const [balanceRefreshing, setBalanceRefreshing] = useState(false)
+
+  // Form states for custom transactions
+  const [spendAmount, setSpendAmount] = useState('')
+  const [spendDescription, setSpendDescription] = useState('')
+  const [addAmount, setAddAmount] = useState('')
+  const [addDescription, setAddDescription] = useState('')
+  const [addType, setAddType] = useState<'bonus' | 'refund' | 'manual'>('bonus')
 
   // Clear any invalid session data on mount
   useEffect(() => {
@@ -108,11 +120,27 @@ export default function CreditSystemDemo() {
     }
   }
 
-  const handleSpendCredits = async () => {
-    const amount = 10
-    const result = await spendCredits(amount, 'Test spend from Lovable app')
+  const handleSpendCredits = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    const amount = parseInt(spendAmount) || 10
+    const description = spendDescription || 'Credit spend from Lovable app'
+
+    if (amount <= 0) {
+      toast.error('Please enter a valid amount')
+      return
+    }
+
+    if (amount > balance) {
+      toast.error('Insufficient balance')
+      return
+    }
+
+    const result = await spendCredits(amount, description)
     if (result.success) {
       console.log(`Spent ${amount} credits. New balance: ${result.balance}`)
+      toast.success(`Successfully spent ${amount} credits`)
+      setSpendAmount('')
+      setSpendDescription('')
       // Automatically refresh transaction history if it's visible
       if (showHistory) {
         await handleGetHistory()
@@ -120,25 +148,49 @@ export default function CreditSystemDemo() {
     }
   }
 
-  const handleAddCredits = async () => {
-    const amount = 50
-    const result = await addCredits(amount, 'bonus', 'Test bonus credits')
+  const handleAddCredits = async (e?: React.FormEvent) => {
+    e?.preventDefault()
+    const amount = parseInt(addAmount) || 50
+    const description = addDescription || 'Credit addition from Lovable app'
+
+    if (amount <= 0) {
+      toast.error('Please enter a valid amount')
+      return
+    }
+
+    const result = await addCredits(amount, addType, description)
     if (result.success) {
       console.log(`Added ${amount} credits. New balance: ${result.balance}`)
+      toast.success(`Successfully added ${amount} credits`)
+      setAddAmount('')
+      setAddDescription('')
       // Automatically refresh transaction history if it's visible
       if (showHistory) {
         await handleGetHistory()
       }
     }
+  }
+
+  const handleRefreshBalance = async () => {
+    setBalanceRefreshing(true)
+    const result = await checkBalance()
+    if (result && result.success) {
+      setBalanceLoaded(true)
+    }
+    // Keep the animation for a moment to make it visible
+    setTimeout(() => setBalanceRefreshing(false), 600)
   }
 
   const handleGetHistory = async () => {
+    setHistoryRefreshing(true)
     const result = await getHistory(1, 10)
     if (result.success && result.history) {
       console.log('Transaction history:', result.history)
       setTransactionHistory(result.history.transactions || [])
       setShowHistory(true)
     }
+    // Keep the animation for a moment to make it visible
+    setTimeout(() => setHistoryRefreshing(false), 600)
   }
 
   // Auto-refresh history when it becomes visible
@@ -326,10 +378,17 @@ export default function CreditSystemDemo() {
                   <Button
                     size="sm"
                     variant="ghost"
-                    onClick={() => checkBalance()}
-                    disabled={loading}
+                    onClick={handleRefreshBalance}
+                    disabled={loading || balanceRefreshing}
+                    title="Refresh balance"
                   >
-                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                    <RefreshCw
+                      className="h-4 w-4"
+                      style={{
+                        animation: balanceRefreshing ? 'spin 0.6s ease-in-out' : 'none',
+                        transition: 'transform 0.2s'
+                      }}
+                    />
                   </Button>
                 </CardTitle>
               </CardHeader>
@@ -346,51 +405,146 @@ export default function CreditSystemDemo() {
           </div>
 
           {/* Operations */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Credit Operations</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-3">
-                <div>
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Spend Credits Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Minus className="h-5 w-5 text-destructive" />
+                  Spend Credits
+                </CardTitle>
+                <CardDescription>
+                  Deduct credits from your balance
+                </CardDescription>
+              </CardHeader>
+              <form onSubmit={handleSpendCredits}>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="spend-amount">Amount</Label>
+                    <Input
+                      id="spend-amount"
+                      type="number"
+                      placeholder="Enter amount to spend"
+                      value={spendAmount}
+                      onChange={(e) => setSpendAmount(e.target.value)}
+                      min="1"
+                      max={balance}
+                      disabled={loading}
+                    />
+                    {balance === 0 && (
+                      <p className="text-xs text-destructive">No credits available</p>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="spend-description">Description (Optional)</Label>
+                    <Textarea
+                      id="spend-description"
+                      placeholder="What are you spending credits on?"
+                      value={spendDescription}
+                      onChange={(e) => setSpendDescription(e.target.value)}
+                      disabled={loading}
+                      rows={3}
+                    />
+                  </div>
+                </CardContent>
+                <CardFooter>
                   <Button
-                    onClick={handleSpendCredits}
-                    disabled={loading || balance < 10}
+                    type="submit"
                     variant="destructive"
+                    disabled={loading || balance === 0}
                     className="w-full"
                   >
-                    <Minus className="mr-2 h-4 w-4" />
-                    Spend 10 Credits
+                    {loading ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Minus className="mr-2 h-4 w-4" />
+                        Spend Credits
+                      </>
+                    )}
                   </Button>
-                  {balance < 10 && (
-                    <p className="text-xs text-destructive mt-1">Insufficient balance</p>
-                  )}
-                </div>
+                </CardFooter>
+              </form>
+            </Card>
 
-                <Button
-                  onClick={handleAddCredits}
-                  disabled={loading}
-                  className="w-full"
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add 50 Bonus Credits
-                </Button>
-
-                <Button
-                  onClick={handleGetHistory}
-                  disabled={loading}
-                  variant="outline"
-                  className="w-full"
-                >
-                  <History className="mr-2 h-4 w-4" />
-                  View Transaction History
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+            {/* Add Credits Card */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-5 w-5 text-green-600" />
+                  Add Credits
+                </CardTitle>
+                <CardDescription>
+                  Add credits to your balance
+                </CardDescription>
+              </CardHeader>
+              <form onSubmit={handleAddCredits}>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="add-amount">Amount</Label>
+                    <Input
+                      id="add-amount"
+                      type="number"
+                      placeholder="Enter amount to add"
+                      value={addAmount}
+                      onChange={(e) => setAddAmount(e.target.value)}
+                      min="1"
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="add-type">Transaction Type</Label>
+                    <Select value={addType} onValueChange={(value: 'bonus' | 'refund' | 'manual') => setAddType(value)}>
+                      <SelectTrigger id="add-type">
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="bonus">Bonus Credits</SelectItem>
+                        <SelectItem value="refund">Refund</SelectItem>
+                        <SelectItem value="manual">Manual Adjustment</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="add-description">Description (Optional)</Label>
+                    <Textarea
+                      id="add-description"
+                      placeholder="Reason for adding credits"
+                      value={addDescription}
+                      onChange={(e) => setAddDescription(e.target.value)}
+                      disabled={loading}
+                      rows={3}
+                    />
+                  </div>
+                </CardContent>
+                <CardFooter>
+                  <Button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full bg-green-600 hover:bg-green-700"
+                  >
+                    {loading ? (
+                      <>
+                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Add Credits
+                      </>
+                    )}
+                  </Button>
+                </CardFooter>
+              </form>
+            </Card>
+          </div>
 
           {/* Transaction History */}
-          {showHistory && transactionHistory.length > 0 && (
+          {showHistory && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
@@ -398,58 +552,64 @@ export default function CreditSystemDemo() {
                     <History className="h-5 w-5" />
                     Transaction History
                   </span>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={handleGetHistory}
-                      disabled={loading}
-                    >
-                      <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => setShowHistory(false)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={handleGetHistory}
+                    disabled={loading || historyRefreshing}
+                    title="Refresh history"
+                  >
+                    <RefreshCw
+                      className="h-4 w-4"
+                      style={{
+                        animation: historyRefreshing ? 'spin 0.6s ease-in-out' : 'none',
+                        transition: 'transform 0.2s'
+                      }}
+                    />
+                  </Button>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableCaption>Recent credit transactions</TableCaption>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Balance</TableHead>
-                      <TableHead>Description</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {transactionHistory.map((transaction) => (
-                      <TableRow key={transaction.id}>
-                        <TableCell className="text-sm">
-                          {new Date(transaction.created_at).toLocaleString()}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={transaction.type === 'spend' || transaction.type === 'deduct' ? 'destructive' : 'default'}
-                                 className={transaction.type === 'spend' || transaction.type === 'deduct' ? '' : 'bg-green-500 hover:bg-green-600'}>
-                            {transaction.type}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className={transaction.amount < 0 ? 'text-destructive' : 'text-green-600'}>
-                          {transaction.amount > 0 ? '+' : ''}{transaction.amount}
-                        </TableCell>
-                        <TableCell>{transaction.balance_after || '-'}</TableCell>
-                        <TableCell className="text-sm">{transaction.description || '-'}</TableCell>
+                {transactionHistory.length > 0 ? (
+                  <Table>
+                    <TableCaption>Recent credit transactions</TableCaption>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Type</TableHead>
+                        <TableHead>Amount</TableHead>
+                        <TableHead>Balance</TableHead>
+                        <TableHead>Description</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {transactionHistory.map((transaction) => (
+                        <TableRow key={transaction.id}>
+                          <TableCell className="text-sm">
+                            {new Date(transaction.created_at).toLocaleString()}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={transaction.type === 'spend' || transaction.type === 'deduct' ? 'destructive' : 'default'}
+                                   className={transaction.type === 'spend' || transaction.type === 'deduct' ? '' : 'bg-green-500 hover:bg-green-600'}>
+                              {transaction.type}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className={transaction.amount < 0 ? 'text-destructive' : 'text-green-600'}>
+                            {transaction.amount > 0 ? '+' : ''}{transaction.amount}
+                          </TableCell>
+                          <TableCell>{transaction.balance_after || '-'}</TableCell>
+                          <TableCell className="text-sm">{transaction.description || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                    <p className="text-sm">No transactions yet</p>
+                    <p className="text-xs mt-1">Your transaction history will appear here</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
