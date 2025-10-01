@@ -38,6 +38,7 @@ export default function CreditSystemDemo() {
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([])
   const [showHistory, setShowHistory] = useState(false)
   const [retryCount, setRetryCount] = useState(0)
+  const [balanceLoaded, setBalanceLoaded] = useState(false)
 
   // Clear any invalid session data on mount
   useEffect(() => {
@@ -78,8 +79,10 @@ export default function CreditSystemDemo() {
       console.log('User is authenticated, fetching balance...')
       checkBalance().then(result => {
         console.log('Initial balance fetch result:', result)
+        setBalanceLoaded(true)
       }).catch(err => {
         console.error('Failed to fetch initial balance:', err)
+        setBalanceLoaded(true)
       })
     }
   }, [isAuthenticated, checkBalance])
@@ -97,6 +100,7 @@ export default function CreditSystemDemo() {
       setTimeout(async () => {
         const balanceResult = await checkBalance()
         console.log('Balance result:', balanceResult)
+        setBalanceLoaded(true)
       }, 100)
       // Clear form
       setEmail('')
@@ -331,7 +335,11 @@ export default function CreditSystemDemo() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">
-                  {balance} Credits
+                  {!balanceLoaded ? (
+                    <span className="text-2xl text-muted-foreground">Loading...</span>
+                  ) : (
+                    `${balance} Credits`
+                  )}
                 </div>
               </CardContent>
             </Card>
