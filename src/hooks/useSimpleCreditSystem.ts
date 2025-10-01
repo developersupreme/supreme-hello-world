@@ -32,7 +32,7 @@ interface OperationResult {
 
 export interface Transaction {
   id: string | number
-  type: 'spend' | 'add' | 'bonus'
+  type: 'spend' | 'add' | 'bonus' | 'deduct'
   amount: number
   balance_after?: number
   description?: string
