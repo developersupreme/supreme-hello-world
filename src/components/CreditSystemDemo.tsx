@@ -440,7 +440,7 @@ export default function CreditSystemDemo() {
                   {!balanceLoaded ? (
                     <span className="text-2xl text-muted-foreground">Loading...</span>
                   ) : (
-                    `${balance} Credits`
+                    `${balance.toLocaleString()} Credits`
                   )}
                 </div>
               </CardContent>
@@ -638,9 +638,9 @@ export default function CreditSystemDemo() {
                             </Badge>
                           </TableCell>
                           <TableCell className={transaction.amount < 0 ? 'text-destructive' : 'text-green-600'}>
-                            {transaction.amount > 0 ? '+' : ''}{transaction.amount}
+                            {transaction.amount > 0 ? '+' : ''}{Math.abs(transaction.amount).toLocaleString()}{transaction.amount < 0 ? '-' : ''}
                           </TableCell>
-                          <TableCell>{transaction.balance_after || '-'}</TableCell>
+                          <TableCell>{transaction.balance_after ? transaction.balance_after.toLocaleString() : '-'}</TableCell>
                           <TableCell className="text-sm">{transaction.description || '-'}</TableCell>
                         </TableRow>
                       ))}
