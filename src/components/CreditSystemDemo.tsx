@@ -52,18 +52,30 @@ export default function CreditSystemDemo() {
   const [addDescription, setAddDescription] = useState('')
   const [addType, setAddType] = useState<'bonus' | 'refund' | 'manual'>('bonus')
 
-  // Clear any invalid session data on mount
+  // Clear all credit-specific data on mount to prevent showing stale/cached balance
   useEffect(() => {
-    const clearInvalidSession = () => {
-      const savedUser = sessionStorage.getItem('supreme_user')
-      if (savedUser === 'undefined' || savedUser === 'null') {
-        sessionStorage.removeItem('supreme_user')
-        sessionStorage.removeItem('supreme_access_token')
-        sessionStorage.removeItem('supreme_refresh_token')
-        console.log('Cleared invalid session data')
-      }
+    const clearCreditData = () => {
+      // Clear all credit-related data from sessionStorage
+      const keysToRemove = [
+        'supreme_user',
+        'supreme_access_token',
+        'supreme_refresh_token',
+        'supreme_credit_balance',
+        'supreme_user_id'
+      ]
+
+      keysToRemove.forEach(key => {
+        sessionStorage.removeItem(key)
+      })
+
+      // Also clear from localStorage if any credit data is stored there
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key)
+      })
+
+      console.log('Cleared all credit-specific data from browser storage')
     }
-    clearInvalidSession()
+    clearCreditData()
   }, [])
 
   const {
@@ -85,17 +97,25 @@ export default function CreditSystemDemo() {
     mode: 'standalone'
   })
 
-  // Fetch balance when authenticated
+  // Fetch balance when authenticated - only set loaded when fetch is successful
   useEffect(() => {
     if (isAuthenticated && checkBalance) {
       console.log('User is authenticated, fetching balance...')
+      // Reset balance loaded state to show loading
+      setBalanceLoaded(false)
       checkBalance().then(result => {
         console.log('Initial balance fetch result:', result)
-        setBalanceLoaded(true)
+        // Only set loaded to true if the fetch was successful
+        if (result && result.success) {
+          setBalanceLoaded(true)
+        }
       }).catch(err => {
         console.error('Failed to fetch initial balance:', err)
-        setBalanceLoaded(true)
+        // Don't set loaded to true on error - keep showing loading
       })
+    } else {
+      // Reset when not authenticated
+      setBalanceLoaded(false)
     }
   }, [isAuthenticated, checkBalance])
 
@@ -108,11 +128,16 @@ export default function CreditSystemDemo() {
     const result = await login(email, password)
     if (result.success) {
       console.log('Login successful!', result)
+      // Reset balance loaded to show loading state
+      setBalanceLoaded(false)
       // Fetch balance after a short delay to ensure tokens are set
       setTimeout(async () => {
         const balanceResult = await checkBalance()
         console.log('Balance result:', balanceResult)
-        setBalanceLoaded(true)
+        // Only set loaded to true if the fetch was successful
+        if (balanceResult && balanceResult.success) {
+          setBalanceLoaded(true)
+        }
       }, 100)
       // Clear form
       setEmail('')
