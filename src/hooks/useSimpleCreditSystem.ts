@@ -176,10 +176,7 @@ export function useSimpleCreditSystem(config: CreditSystemConfig = {}) {
           localStorage.removeItem('supreme_refresh_token')
           localStorage.removeItem('supreme_user')
 
-          // Reset all state
-          setIsAuthenticated(false)
-          setUser(null)
-          setBalance(0)
+          // Reset error state only - don't reset balance to 0 as it will be fetched
           setError(null)
 
           // Now set the new values
