@@ -63,7 +63,7 @@ export default function CreditSystemDemo() {
     apiBaseUrl: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/secure-credits/jwt",
     authUrl: import.meta.env.VITE_AUTH_URL || "http://127.0.0.1:8000/api/jwt",
     autoInit: true,
-    debug: true,
+    debug: false,
     parentTimeout: 15000, // 15 seconds to wait for parent response (increased from 5s due to Laravel processing time)
     allowedOrigins: [
       "http://127.0.0.1:8000",
