@@ -81,27 +81,15 @@ export default function CreditSystemDemo() {
 
   const isEmbedded = mode === 'embedded'
 
-  // Fetch balance when authenticated - only set loaded when fetch is successful
+  // Set balance as loaded when authenticated (SDK fetches automatically)
   useEffect(() => {
-    if (isAuthenticated && checkBalance) {
-      console.log('User is authenticated, fetching balance...')
-      // Reset balance loaded state to show loading
-      setBalanceLoaded(false)
-      checkBalance().then(result => {
-        console.log('Initial balance fetch result:', result)
-        // Only set loaded to true if the fetch was successful
-        if (result && result.success) {
-          setBalanceLoaded(true)
-        }
-      }).catch(err => {
-        console.error('Failed to fetch initial balance:', err)
-        // Don't set loaded to true on error - keep showing loading
-      })
+    if (isAuthenticated) {
+      // SDK already fetched balance, just mark as loaded
+      setBalanceLoaded(true)
     } else {
-      // Reset when not authenticated
       setBalanceLoaded(false)
     }
-  }, [isAuthenticated, checkBalance])
+  }, [isAuthenticated])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
