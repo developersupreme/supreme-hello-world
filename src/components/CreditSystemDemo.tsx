@@ -1,24 +1,16 @@
-import { useState, useEffect, useRef } from 'react'
-import { useCreditSystem, type Transaction } from '@supreme-ai/credit-sdk'
-import { toast } from 'sonner'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
-import {
-  Table,
-  TableBody,
-  TableCaption,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table"
+import { useState, useEffect, useRef } from "react";
+import { useCreditSystem, type Transaction } from "@supreme-ai/credit-sdk";
+import { toast } from "sonner";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   CreditCard,
   LogIn,
@@ -31,26 +23,26 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  X
-} from 'lucide-react'
+  X,
+} from "lucide-react";
 
 export default function CreditSystemDemo() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
-  const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([])
-  const [showHistory, setShowHistory] = useState(true)  // Changed to true to always show
-  const [retryCount, setRetryCount] = useState(0)
-  const [balanceLoaded, setBalanceLoaded] = useState(false)
-  const [historyRefreshing, setHistoryRefreshing] = useState(false)
-  const [balanceRefreshing, setBalanceRefreshing] = useState(false)
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([]);
+  const [showHistory, setShowHistory] = useState(true); // Changed to true to always show
+  const [retryCount, setRetryCount] = useState(0);
+  const [balanceLoaded, setBalanceLoaded] = useState(false);
+  const [historyRefreshing, setHistoryRefreshing] = useState(false);
+  const [balanceRefreshing, setBalanceRefreshing] = useState(false);
 
   // Form states for custom transactions
-  const [spendAmount, setSpendAmount] = useState('')
-  const [spendDescription, setSpendDescription] = useState('')
-  const [addAmount, setAddAmount] = useState('')
-  const [addDescription, setAddDescription] = useState('')
-  const [addType, setAddType] = useState<'bonus' | 'refund' | 'manual'>('bonus')
+  const [spendAmount, setSpendAmount] = useState("");
+  const [spendDescription, setSpendDescription] = useState("");
+  const [addAmount, setAddAmount] = useState("");
+  const [addDescription, setAddDescription] = useState("");
+  const [addType, setAddType] = useState<"bonus" | "refund" | "manual">("bonus");
 
   // Note: SDK manages its own storage with 'creditSystem_' prefix
 
@@ -66,176 +58,181 @@ export default function CreditSystemDemo() {
     checkBalance,
     spendCredits,
     addCredits,
-    getHistory
+    getHistory,
   } = useCreditSystem({
-    apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/secure-credits/jwt',
-    authUrl: import.meta.env.VITE_AUTH_URL || 'http://127.0.0.1:8000/api/jwt',
+    apiBaseUrl: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/secure-credits/jwt",
+    authUrl: import.meta.env.VITE_AUTH_URL || "http://127.0.0.1:8000/api/jwt",
     autoInit: true,
     debug: true,
     parentTimeout: 15000, // 15 seconds to wait for parent response (increased from 5s due to Laravel processing time)
-    allowedOrigins: ['http://127.0.0.1:8000', 'http://192.168.2.201:8000', 'http://localhost:8000']
-  })
+    allowedOrigins: [
+      "http://127.0.0.1:8000",
+      "http://192.168.2.201:8000",
+      "http://localhost:8000",
+      "https://v2.supremegroup.ai",
+    ],
+  });
 
   // Debug logging
   useEffect(() => {
-    console.log('[CreditSystemDemo] State:', { isAuthenticated, mode, loading, error })
-  }, [isAuthenticated, mode, loading, error])
+    console.log("[CreditSystemDemo] State:", { isAuthenticated, mode, loading, error });
+  }, [isAuthenticated, mode, loading, error]);
 
-  const isEmbedded = mode === 'embedded'
+  const isEmbedded = mode === "embedded";
 
   // Track when balance is fetched (null means not fetched yet)
   useEffect(() => {
     if (isAuthenticated && balance !== null) {
       // Balance has been fetched (even if it's 0)
-      setBalanceLoaded(true)
+      setBalanceLoaded(true);
     } else {
       // Reset when not authenticated or balance is null
-      setBalanceLoaded(false)
+      setBalanceLoaded(false);
     }
-  }, [isAuthenticated, balance])
+  }, [isAuthenticated, balance]);
 
   const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!email || !password) {
-      return
+      return;
     }
 
-    const result = await login(email, password)
+    const result = await login(email, password);
     if (result.success) {
-      console.log('Login successful!', result)
+      console.log("Login successful!", result);
       // Reset balance loaded to show loading state
-      setBalanceLoaded(false)
+      setBalanceLoaded(false);
       // Fetch balance after a short delay to ensure tokens are set
       setTimeout(async () => {
-        const balanceResult = await checkBalance()
-        console.log('Balance result:', balanceResult)
+        const balanceResult = await checkBalance();
+        console.log("Balance result:", balanceResult);
         // Only set loaded to true if the fetch was successful
         if (balanceResult && balanceResult.success) {
-          setBalanceLoaded(true)
+          setBalanceLoaded(true);
         }
-      }, 100)
+      }, 100);
       // Clear form
-      setEmail('')
-      setPassword('')
+      setEmail("");
+      setPassword("");
     }
-  }
+  };
 
   const handleSpendCredits = async (e?: React.FormEvent) => {
-    e?.preventDefault()
+    e?.preventDefault();
 
     // Check if amount field is empty
-    if (!spendAmount || spendAmount.trim() === '') {
-      toast.error('Please enter an amount to spend')
-      return
+    if (!spendAmount || spendAmount.trim() === "") {
+      toast.error("Please enter an amount to spend");
+      return;
     }
 
-    const amount = parseInt(spendAmount)
+    const amount = parseInt(spendAmount);
 
     // Validate numeric value
     if (isNaN(amount) || amount <= 0) {
-      toast.error('Please enter a valid positive amount')
-      return
+      toast.error("Please enter a valid positive amount");
+      return;
     }
 
     if (balance === null || amount > balance) {
-      toast.error('Insufficient balance')
-      return
+      toast.error("Insufficient balance");
+      return;
     }
 
-    const description = spendDescription.trim() || 'Credit spend from Lovable app'
+    const description = spendDescription.trim() || "Credit spend from Lovable app";
 
-    const result = await spendCredits(amount, description)
+    const result = await spendCredits(amount, description);
     if (result.success) {
-      console.log(`Spent ${amount} credits. New balance: ${result.newBalance}`)
-      toast.success(`Successfully spent ${amount} credits`)
-      setSpendAmount('')
-      setSpendDescription('')
+      console.log(`Spent ${amount} credits. New balance: ${result.newBalance}`);
+      toast.success(`Successfully spent ${amount} credits`);
+      setSpendAmount("");
+      setSpendDescription("");
       // Immediately refresh balance
-      await checkBalance()
+      await checkBalance();
       // Automatically refresh transaction history if it's visible
       if (showHistory) {
-        await handleGetHistory()
+        await handleGetHistory();
       }
     } else if (result.error) {
-      toast.error(result.error)
+      toast.error(result.error);
     }
-  }
+  };
 
   const handleAddCredits = async (e?: React.FormEvent) => {
-    e?.preventDefault()
+    e?.preventDefault();
 
     // Check if amount field is empty
-    if (!addAmount || addAmount.trim() === '') {
-      toast.error('Please enter an amount to add')
-      return
+    if (!addAmount || addAmount.trim() === "") {
+      toast.error("Please enter an amount to add");
+      return;
     }
 
-    const amount = parseInt(addAmount)
+    const amount = parseInt(addAmount);
 
     // Validate numeric value
     if (isNaN(amount) || amount <= 0) {
-      toast.error('Please enter a valid positive amount')
-      return
+      toast.error("Please enter a valid positive amount");
+      return;
     }
 
-    const description = addDescription.trim() || 'Credit addition from Lovable app'
+    const description = addDescription.trim() || "Credit addition from Lovable app";
 
-    const result = await addCredits(amount, addType, description)
+    const result = await addCredits(amount, addType, description);
     if (result.success) {
-      console.log(`Added ${amount} credits. New balance: ${result.newBalance}`)
-      toast.success(`Successfully added ${amount} credits`)
-      setAddAmount('')
-      setAddDescription('')
+      console.log(`Added ${amount} credits. New balance: ${result.newBalance}`);
+      toast.success(`Successfully added ${amount} credits`);
+      setAddAmount("");
+      setAddDescription("");
       // Immediately refresh balance
-      await checkBalance()
+      await checkBalance();
       // Automatically refresh transaction history if it's visible
       if (showHistory) {
-        await handleGetHistory()
+        await handleGetHistory();
       }
     } else if (result.error) {
-      toast.error(result.error)
+      toast.error(result.error);
     }
-  }
+  };
 
   const handleRefreshBalance = async () => {
-    setBalanceRefreshing(true)
-    const result = await checkBalance()
+    setBalanceRefreshing(true);
+    const result = await checkBalance();
     if (result && result.success) {
-      setBalanceLoaded(true)
+      setBalanceLoaded(true);
     }
     // Keep the animation for a moment to make it visible
-    setTimeout(() => setBalanceRefreshing(false), 600)
-  }
+    setTimeout(() => setBalanceRefreshing(false), 600);
+  };
 
   const handleGetHistory = async () => {
-    setHistoryRefreshing(true)
-    const result = await getHistory(1, 10)
+    setHistoryRefreshing(true);
+    const result = await getHistory(1, 10);
     if (result.success && result.transactions) {
-      console.log('Transaction history:', result.transactions)
-      setTransactionHistory(result.transactions || [])
-      setShowHistory(true)
+      console.log("Transaction history:", result.transactions);
+      setTransactionHistory(result.transactions || []);
+      setShowHistory(true);
     }
     // Keep the animation for a moment to make it visible
-    setTimeout(() => setHistoryRefreshing(false), 600)
-  }
+    setTimeout(() => setHistoryRefreshing(false), 600);
+  };
 
   // Auto-refresh history when it becomes visible
   useEffect(() => {
     if (showHistory && isAuthenticated) {
-      handleGetHistory()
+      handleGetHistory();
     }
-  }, [showHistory, isAuthenticated])
+  }, [showHistory, isAuthenticated]);
 
   return (
     <div className="container mx-auto p-6 max-w-6xl">
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Supreme AI Credit System</h1>
         <div className="flex gap-2">
-          <Badge variant={isEmbedded ? 'secondary' : 'default'}>
-            Mode: {isEmbedded ? 'Embedded (iframe)' : 'Standalone'}
+          <Badge variant={isEmbedded ? "secondary" : "default"}>
+            Mode: {isEmbedded ? "Embedded (iframe)" : "Standalone"}
           </Badge>
-          <Badge variant={isAuthenticated ? 'default' : 'outline'}>
-            Authenticated: {isAuthenticated ? 'Yes' : 'No'}
+          <Badge variant={isAuthenticated ? "default" : "outline"}>
+            Authenticated: {isAuthenticated ? "Yes" : "No"}
           </Badge>
         </div>
       </div>
@@ -259,7 +256,7 @@ export default function CreditSystemDemo() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <LogIn className="h-5 w-5" />
-              {isEmbedded ? 'Authenticating...' : 'Login to Supreme AI'}
+              {isEmbedded ? "Authenticating..." : "Login to Supreme AI"}
             </CardTitle>
             <CardDescription>
               {isEmbedded ? (
@@ -268,16 +265,12 @@ export default function CreditSystemDemo() {
                     Authentication is handled by the parent application.
                   </span>
                   <br />
-                  <span className="text-xs text-muted-foreground">
-                    Getting credentials from Laravel session...
-                  </span>
+                  <span className="text-xs text-muted-foreground">Getting credentials from Laravel session...</span>
                   <br />
-                  <span className="text-xs text-yellow-600 hidden">
-                    Will retry every 15 seconds if not received
-                  </span>
+                  <span className="text-xs text-yellow-600 hidden">Will retry every 15 seconds if not received</span>
                 </>
               ) : (
-                'Enter your credentials to access the credit system'
+                "Enter your credentials to access the credit system"
               )}
             </CardDescription>
           </CardHeader>
@@ -304,7 +297,7 @@ export default function CreditSystemDemo() {
                     <div className="relative">
                       <Input
                         id="password"
-                        type={showPassword ? 'text' : 'password'}
+                        type={showPassword ? "text" : "password"}
                         placeholder="Enter your password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -320,11 +313,7 @@ export default function CreditSystemDemo() {
                         onClick={() => setShowPassword(!showPassword)}
                         disabled={loading}
                       >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
                   </div>
@@ -337,7 +326,7 @@ export default function CreditSystemDemo() {
                         Logging in...
                       </>
                     ) : (
-                      'Login'
+                      "Login"
                     )}
                   </Button>
 
@@ -356,8 +345,8 @@ export default function CreditSystemDemo() {
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        sessionStorage.clear()
-                        window.location.reload()
+                        sessionStorage.clear();
+                        window.location.reload();
                       }}
                       className="w-full mt-2"
                     >
@@ -411,8 +400,8 @@ export default function CreditSystemDemo() {
                     <RefreshCw
                       className="h-4 w-4"
                       style={{
-                        animation: balanceRefreshing ? 'spin 0.6s ease-in-out' : 'none',
-                        transition: 'transform 0.2s'
+                        animation: balanceRefreshing ? "spin 0.6s ease-in-out" : "none",
+                        transition: "transform 0.2s",
                       }}
                     />
                   </Button>
@@ -439,9 +428,7 @@ export default function CreditSystemDemo() {
                   <Minus className="h-5 w-5 text-destructive" />
                   Spend Credits
                 </CardTitle>
-                <CardDescription>
-                  Deduct credits from your balance
-                </CardDescription>
+                <CardDescription>Deduct credits from your balance</CardDescription>
               </CardHeader>
               <form onSubmit={handleSpendCredits}>
                 <CardContent className="space-y-4">
@@ -457,9 +444,7 @@ export default function CreditSystemDemo() {
                       max={balance ?? undefined}
                       disabled={loading}
                     />
-                    {balance === 0 && (
-                      <p className="text-xs text-destructive">No credits available</p>
-                    )}
+                    {balance === 0 && <p className="text-xs text-destructive">No credits available</p>}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="spend-description">Description (Optional)</Label>
@@ -474,12 +459,7 @@ export default function CreditSystemDemo() {
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button
-                    type="submit"
-                    variant="destructive"
-                    disabled={loading || balance === 0}
-                    className="w-full"
-                  >
+                  <Button type="submit" variant="destructive" disabled={loading || balance === 0} className="w-full">
                     {loading ? (
                       <>
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -503,9 +483,7 @@ export default function CreditSystemDemo() {
                   <Plus className="h-5 w-5 text-green-600" />
                   Add Credits
                 </CardTitle>
-                <CardDescription>
-                  Add credits to your balance
-                </CardDescription>
+                <CardDescription>Add credits to your balance</CardDescription>
               </CardHeader>
               <form onSubmit={handleAddCredits}>
                 <CardContent className="space-y-4">
@@ -523,7 +501,7 @@ export default function CreditSystemDemo() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="add-type">Transaction Type</Label>
-                    <Select value={addType} onValueChange={(value: 'bonus' | 'refund' | 'manual') => setAddType(value)}>
+                    <Select value={addType} onValueChange={(value: "bonus" | "refund" | "manual") => setAddType(value)}>
                       <SelectTrigger id="add-type">
                         <SelectValue placeholder="Select type" />
                       </SelectTrigger>
@@ -547,11 +525,7 @@ export default function CreditSystemDemo() {
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full bg-green-600 hover:bg-green-700"
-                  >
+                  <Button type="submit" disabled={loading} className="w-full bg-green-600 hover:bg-green-700">
                     {loading ? (
                       <>
                         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
@@ -588,8 +562,8 @@ export default function CreditSystemDemo() {
                     <RefreshCw
                       className="h-4 w-4"
                       style={{
-                        animation: historyRefreshing ? 'spin 0.6s ease-in-out' : 'none',
-                        transition: 'transform 0.2s'
+                        animation: historyRefreshing ? "spin 0.6s ease-in-out" : "none",
+                        transition: "transform 0.2s",
                       }}
                     />
                   </Button>
@@ -611,20 +585,24 @@ export default function CreditSystemDemo() {
                     <TableBody>
                       {transactionHistory.map((transaction) => (
                         <TableRow key={transaction.id}>
-                          <TableCell className="text-sm">
-                            {new Date(transaction.created_at).toLocaleString()}
-                          </TableCell>
+                          <TableCell className="text-sm">{new Date(transaction.created_at).toLocaleString()}</TableCell>
                           <TableCell>
-                            <Badge variant={transaction.type === 'debit' ? 'destructive' : 'default'}
-                                   className={transaction.type === 'debit' ? '' : 'bg-green-500 hover:bg-green-600'}>
+                            <Badge
+                              variant={transaction.type === "debit" ? "destructive" : "default"}
+                              className={transaction.type === "debit" ? "" : "bg-green-500 hover:bg-green-600"}
+                            >
                               {transaction.type}
                             </Badge>
                           </TableCell>
-                          <TableCell className={transaction.amount < 0 ? 'text-destructive' : 'text-green-600'}>
-                            {transaction.amount > 0 ? '+' : ''}{Math.abs(transaction.amount).toLocaleString()}{transaction.amount < 0 ? '-' : ''}
+                          <TableCell className={transaction.amount < 0 ? "text-destructive" : "text-green-600"}>
+                            {transaction.amount > 0 ? "+" : ""}
+                            {Math.abs(transaction.amount).toLocaleString()}
+                            {transaction.amount < 0 ? "-" : ""}
                           </TableCell>
-                          <TableCell>{transaction.balance_after ? transaction.balance_after.toLocaleString() : '-'}</TableCell>
-                          <TableCell className="text-sm">{transaction.description || '-'}</TableCell>
+                          <TableCell>
+                            {transaction.balance_after ? transaction.balance_after.toLocaleString() : "-"}
+                          </TableCell>
+                          <TableCell className="text-sm">{transaction.description || "-"}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -656,5 +634,5 @@ export default function CreditSystemDemo() {
         Open browser console to see detailed responses
       </div>
     </div>
-  )
+  );
 }
