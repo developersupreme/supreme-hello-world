@@ -65,12 +65,7 @@ export default function CreditSystemDemo() {
     autoInit: true,
     debug: false,
     parentTimeout: 15000, // 15 seconds to wait for parent response (increased from 5s due to Laravel processing time)
-    allowedOrigins: [
-      "http://127.0.0.1:8000",
-      "http://192.168.2.201:8000",
-      "http://localhost:8000",
-      "https://v2.supremegroup.ai",
-    ],
+    allowedOrigins: (import.meta.env.VITE_ALLOWED_PARENTS || "").split(',').map(domain => domain.trim()).filter(Boolean),
   });
 
   // Debug logging
