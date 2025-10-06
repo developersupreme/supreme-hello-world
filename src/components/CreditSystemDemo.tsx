@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useCreditSystem, type Transaction } from '@supreme-ai/credit-sdk'
 import { toast } from 'sonner'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
@@ -71,7 +71,9 @@ export default function CreditSystemDemo() {
     apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/secure-credits/jwt',
     authUrl: import.meta.env.VITE_AUTH_URL || 'http://127.0.0.1:8000/api/jwt',
     autoInit: true,
-    debug: true
+    debug: true,
+    parentTimeout: 15000, // 15 seconds to wait for parent response (increased from 5s due to Laravel processing time)
+    allowedOrigins: ['http://127.0.0.1:8000', 'http://192.168.2.201:8000', 'http://localhost:8000']
   })
 
   // Debug logging
@@ -81,15 +83,16 @@ export default function CreditSystemDemo() {
 
   const isEmbedded = mode === 'embedded'
 
-  // Set balance as loaded when authenticated (SDK fetches automatically)
+  // Track when balance is fetched (null means not fetched yet)
   useEffect(() => {
-    if (isAuthenticated) {
-      // SDK already fetched balance, just mark as loaded
+    if (isAuthenticated && balance !== null) {
+      // Balance has been fetched (even if it's 0)
       setBalanceLoaded(true)
     } else {
+      // Reset when not authenticated or balance is null
       setBalanceLoaded(false)
     }
-  }, [isAuthenticated])
+  }, [isAuthenticated, balance])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -134,7 +137,7 @@ export default function CreditSystemDemo() {
       return
     }
 
-    if (amount > balance) {
+    if (balance === null || amount > balance) {
       toast.error('Insufficient balance')
       return
     }
@@ -413,7 +416,7 @@ export default function CreditSystemDemo() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold">
-                  {!balanceLoaded ? (
+                  {!balanceLoaded || balance === null ? (
                     <span className="text-2xl text-muted-foreground">Loading...</span>
                   ) : (
                     `${balance.toLocaleString()} Credits`
@@ -447,7 +450,7 @@ export default function CreditSystemDemo() {
                       value={spendAmount}
                       onChange={(e) => setSpendAmount(e.target.value)}
                       min="1"
-                      max={balance}
+                      max={balance ?? undefined}
                       disabled={loading}
                     />
                     {balance === 0 && (
