@@ -46,6 +46,9 @@ export default function CreditSystemDemo() {
 
   // Note: SDK manages its own storage with 'creditSystem_' prefix
 
+  // Debug mode flag
+  const DEBUG = false;
+
   const {
     isAuthenticated,
     mode,
@@ -63,14 +66,16 @@ export default function CreditSystemDemo() {
     apiBaseUrl: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/secure-credits/jwt",
     authUrl: import.meta.env.VITE_AUTH_URL || "http://127.0.0.1:8000/api/jwt",
     autoInit: true,
-    debug: false,
+    debug: DEBUG,
     parentTimeout: 15000, // 15 seconds to wait for parent response (increased from 5s due to Laravel processing time)
     allowedOrigins: (import.meta.env.VITE_ALLOWED_PARENTS || "").split(',').map(domain => domain.trim()).filter(Boolean),
   });
 
   // Debug logging
   useEffect(() => {
-    console.log("[CreditSystemDemo] State:", { isAuthenticated, mode, loading, error });
+    if (DEBUG) {
+      console.log("[CreditSystemDemo] State:", { isAuthenticated, mode, loading, error });
+    }
   }, [isAuthenticated, mode, loading, error]);
 
   const isEmbedded = mode === "embedded";
@@ -94,13 +99,13 @@ export default function CreditSystemDemo() {
 
     const result = await login(email, password);
     if (result.success) {
-      console.log("Login successful!", result);
+      if (DEBUG) console.log("Login successful!", result);
       // Reset balance loaded to show loading state
       setBalanceLoaded(false);
       // Fetch balance after a short delay to ensure tokens are set
       setTimeout(async () => {
         const balanceResult = await checkBalance();
-        console.log("Balance result:", balanceResult);
+        if (DEBUG) console.log("Balance result:", balanceResult);
         // Only set loaded to true if the fetch was successful
         if (balanceResult && balanceResult.success) {
           setBalanceLoaded(true);
@@ -138,7 +143,7 @@ export default function CreditSystemDemo() {
 
     const result = await spendCredits(amount, description);
     if (result.success) {
-      console.log(`Spent ${amount} credits. New balance: ${result.newBalance}`);
+      if (DEBUG) console.log(`Spent ${amount} credits. New balance: ${result.newBalance}`);
       toast.success(`Successfully spent ${amount} credits`);
       setSpendAmount("");
       setSpendDescription("");
@@ -174,7 +179,7 @@ export default function CreditSystemDemo() {
 
     const result = await addCredits(amount, addType, description);
     if (result.success) {
-      console.log(`Added ${amount} credits. New balance: ${result.newBalance}`);
+      if (DEBUG) console.log(`Added ${amount} credits. New balance: ${result.newBalance}`);
       toast.success(`Successfully added ${amount} credits`);
       setAddAmount("");
       setAddDescription("");
@@ -203,7 +208,7 @@ export default function CreditSystemDemo() {
     setHistoryRefreshing(true);
     const result = await getHistory(1, 10);
     if (result.success && result.transactions) {
-      console.log("Transaction history:", result.transactions);
+      if (DEBUG) console.log("Transaction history:", result.transactions);
       setTransactionHistory(result.transactions || []);
       setShowHistory(true);
     }
