@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useSimpleCreditSystem, type Transaction } from '@/hooks/useSimpleCreditSystem'
+import { useCreditSystem, type Transaction } from '@supreme-ai/credit-sdk'
 import { toast } from 'sonner'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -52,35 +52,11 @@ export default function CreditSystemDemo() {
   const [addDescription, setAddDescription] = useState('')
   const [addType, setAddType] = useState<'bonus' | 'refund' | 'manual'>('bonus')
 
-  // Clear all credit-specific data on mount to prevent showing stale/cached balance
-  useEffect(() => {
-    const clearCreditData = () => {
-      // Clear all credit-related data from sessionStorage
-      const keysToRemove = [
-        'supreme_user',
-        'supreme_access_token',
-        'supreme_refresh_token',
-        'supreme_credit_balance',
-        'supreme_user_id'
-      ]
-
-      keysToRemove.forEach(key => {
-        sessionStorage.removeItem(key)
-      })
-
-      // Also clear from localStorage if any credit data is stored there
-      keysToRemove.forEach(key => {
-        localStorage.removeItem(key)
-      })
-
-      console.log('Cleared all credit-specific data from browser storage')
-    }
-    clearCreditData()
-  }, [])
+  // Note: SDK manages its own storage with 'creditSystem_' prefix
 
   const {
     isAuthenticated,
-    isEmbedded,
+    mode,
     user,
     balance,
     loading,
@@ -91,11 +67,19 @@ export default function CreditSystemDemo() {
     spendCredits,
     addCredits,
     getHistory
-  } = useSimpleCreditSystem({
+  } = useCreditSystem({
     apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000/api/secure-credits/jwt',
     authUrl: import.meta.env.VITE_AUTH_URL || 'http://127.0.0.1:8000/api/jwt',
-    mode: 'standalone'
+    autoInit: true,
+    debug: true
   })
+
+  // Debug logging
+  useEffect(() => {
+    console.log('[CreditSystemDemo] State:', { isAuthenticated, mode, loading, error })
+  }, [isAuthenticated, mode, loading, error])
+
+  const isEmbedded = mode === 'embedded'
 
   // Fetch balance when authenticated - only set loaded when fetch is successful
   useEffect(() => {
@@ -171,7 +155,7 @@ export default function CreditSystemDemo() {
 
     const result = await spendCredits(amount, description)
     if (result.success) {
-      console.log(`Spent ${amount} credits. New balance: ${result.balance}`)
+      console.log(`Spent ${amount} credits. New balance: ${result.newBalance}`)
       toast.success(`Successfully spent ${amount} credits`)
       setSpendAmount('')
       setSpendDescription('')
@@ -179,6 +163,8 @@ export default function CreditSystemDemo() {
       if (showHistory) {
         await handleGetHistory()
       }
+    } else if (result.error) {
+      toast.error(result.error)
     }
   }
 
@@ -203,7 +189,7 @@ export default function CreditSystemDemo() {
 
     const result = await addCredits(amount, addType, description)
     if (result.success) {
-      console.log(`Added ${amount} credits. New balance: ${result.balance}`)
+      console.log(`Added ${amount} credits. New balance: ${result.newBalance}`)
       toast.success(`Successfully added ${amount} credits`)
       setAddAmount('')
       setAddDescription('')
@@ -211,6 +197,8 @@ export default function CreditSystemDemo() {
       if (showHistory) {
         await handleGetHistory()
       }
+    } else if (result.error) {
+      toast.error(result.error)
     }
   }
 
@@ -227,9 +215,9 @@ export default function CreditSystemDemo() {
   const handleGetHistory = async () => {
     setHistoryRefreshing(true)
     const result = await getHistory(1, 10)
-    if (result.success && result.history) {
-      console.log('Transaction history:', result.history)
-      setTransactionHistory(result.history.transactions || [])
+    if (result.success && result.transactions) {
+      console.log('Transaction history:', result.transactions)
+      setTransactionHistory(result.transactions || [])
       setShowHistory(true)
     }
     // Keep the animation for a moment to make it visible
