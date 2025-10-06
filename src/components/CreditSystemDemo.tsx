@@ -47,7 +47,7 @@ export default function CreditSystemDemo() {
   // Note: SDK manages its own storage with 'creditSystem_' prefix
 
   // Debug mode flag
-  const DEBUG = false;
+  const DEBUG = true;
 
   const {
     isAuthenticated,
@@ -68,7 +68,10 @@ export default function CreditSystemDemo() {
     autoInit: true,
     debug: DEBUG,
     parentTimeout: 15000, // 15 seconds to wait for parent response (increased from 5s due to Laravel processing time)
-    allowedOrigins: (import.meta.env.VITE_ALLOWED_PARENTS || "").split(',').map(domain => domain.trim()).filter(Boolean),
+    allowedOrigins: (import.meta.env.VITE_ALLOWED_PARENTS || "")
+      .split(",")
+      .map((domain) => domain.trim())
+      .filter(Boolean),
   });
 
   // Debug logging
