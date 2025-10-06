@@ -611,8 +611,8 @@ export default function CreditSystemDemo() {
                             {new Date(transaction.created_at).toLocaleString()}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={transaction.type === 'spend' || transaction.type === 'deduct' ? 'destructive' : 'default'}
-                                   className={transaction.type === 'spend' || transaction.type === 'deduct' ? '' : 'bg-green-500 hover:bg-green-600'}>
+                            <Badge variant={transaction.type === 'debit' ? 'destructive' : 'default'}
+                                   className={transaction.type === 'debit' ? '' : 'bg-green-500 hover:bg-green-600'}>
                               {transaction.type}
                             </Badge>
                           </TableCell>
