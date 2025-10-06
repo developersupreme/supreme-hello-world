@@ -150,6 +150,8 @@ export default function CreditSystemDemo() {
       toast.success(`Successfully spent ${amount} credits`)
       setSpendAmount('')
       setSpendDescription('')
+      // Immediately refresh balance
+      await checkBalance()
       // Automatically refresh transaction history if it's visible
       if (showHistory) {
         await handleGetHistory()
@@ -184,6 +186,8 @@ export default function CreditSystemDemo() {
       toast.success(`Successfully added ${amount} credits`)
       setAddAmount('')
       setAddDescription('')
+      // Immediately refresh balance
+      await checkBalance()
       // Automatically refresh transaction history if it's visible
       if (showHistory) {
         await handleGetHistory()
