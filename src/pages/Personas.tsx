@@ -22,7 +22,7 @@ const Personas = () => {
   const navigate = useNavigate();
 
   // Debug mode flag - same as Auth
-  const DEBUG = false;
+  const DEBUG = true;
 
   useEffect(() => {
     if (DEBUG) {
