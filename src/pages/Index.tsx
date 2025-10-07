@@ -23,7 +23,7 @@ const Index = () => {
         </p>
         
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link to="/auth">
+          <Link to="/credits">
             <Button
               size="lg"
               className="bg-gradient-primary hover:opacity-90 shadow-premium text-lg px-8"
