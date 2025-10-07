@@ -85,21 +85,16 @@ const Personas = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            <Link to="/">
+            <Link to="/credits">
               <Button variant="ghost">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to Home
+                Back
               </Button>
             </Link>
-            <div className="flex gap-2">
-              <Link to="/credits">
-                <Button variant="outline">Credit System</Button>
-              </Link>
-              <Button variant="destructive" onClick={handleLogout}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
-              </Button>
-            </div>
+            <Button variant="destructive" onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              Logout
+            </Button>
           </div>
 
           <Card className="p-6 border-2 shadow-lg mb-8">
