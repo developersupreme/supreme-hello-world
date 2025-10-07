@@ -16,17 +16,22 @@ interface Persona {
 const Personas = () => {
   const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null);
   const [userEmail, setUserEmail] = useState<string>("");
+  const [userName, setUserName] = useState<string>("");
   const { toast } = useToast();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const auth = sessionStorage.getItem('creditSystem_auth');
-    if (!auth) {
+    const accessToken = sessionStorage.getItem('creditSystem_accessToken');
+    if (!accessToken) {
       navigate("/auth");
       return;
     }
-    const authData = JSON.parse(auth);
-    setUserEmail(authData.email || "");
+    const userStr = sessionStorage.getItem('creditSystem_user');
+    if (userStr) {
+      const userData = JSON.parse(userStr);
+      setUserEmail(userData.email || "");
+      setUserName(userData.name || "");
+    }
   }, [navigate]);
 
   const fetchPersonaById = async (id: number) => {
@@ -40,10 +45,9 @@ const Personas = () => {
       }
 
       const personasClient = new PersonasClientClass({
-        apiBaseUrl: "https://v2.supremegroup.ai/api",
+        apiBaseUrl: import.meta.env.VITE_PERSONAS_API_URL || "http://127.0.0.1:8000/api",
         getAuthToken: () => {
-          const auth = sessionStorage.getItem('creditSystem_auth');
-          return auth ? JSON.parse(auth).token : null;
+          return sessionStorage.getItem('creditSystem_accessToken');
         },
         debug: true
       });
@@ -72,7 +76,9 @@ const Personas = () => {
   };
 
   const handleLogout = () => {
-    sessionStorage.removeItem('creditSystem_auth');
+    sessionStorage.removeItem('creditSystem_accessToken');
+    sessionStorage.removeItem('creditSystem_refreshToken');
+    sessionStorage.removeItem('creditSystem_user');
     toast({
       title: "Logged out",
       description: "You have been logged out successfully",
@@ -84,13 +90,7 @@ const Personas = () => {
     <div className="min-h-screen bg-gradient-hero">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <Link to="/credits">
-              <Button variant="ghost">
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
-              </Button>
-            </Link>
+          <div className="flex items-center justify-end mb-4">
             <Button variant="destructive" onClick={handleLogout}>
               <LogOut className="mr-2 h-4 w-4" />
               Logout
@@ -103,7 +103,7 @@ const Personas = () => {
                 <User className="h-8 w-8 text-primary-foreground" />
               </div>
               <div>
-                <h2 className="text-2xl font-bold">User Profile</h2>
+                <h2 className="text-2xl font-bold">{userName || "User Profile"}</h2>
                 <div className="flex items-center gap-2 text-muted-foreground mt-1">
                   <Mail className="h-4 w-4" />
                   <span>{userEmail}</span>
@@ -143,16 +143,52 @@ const Personas = () => {
                 <span className="font-semibold">ID:</span>{" "}
                 {selectedPersona.id}
               </div>
-              {selectedPersona.description && (
+              {selectedPersona.short_description && (
                 <div>
-                  <span className="font-semibold">Description:</span>{" "}
-                  {selectedPersona.description}
+                  <span className="font-semibold">Short Description:</span>{" "}
+                  {selectedPersona.short_description}
+                </div>
+              )}
+              {selectedPersona.long_description && (
+                <div>
+                  <span className="font-semibold">Long Description:</span>{" "}
+                  <div className="mt-1 text-sm whitespace-pre-wrap">{selectedPersona.long_description}</div>
                 </div>
               )}
               {selectedPersona.category && (
                 <div>
                   <span className="font-semibold">Category:</span>{" "}
                   {selectedPersona.category}
+                </div>
+              )}
+              {selectedPersona.geo && (
+                <div>
+                  <span className="font-semibold">Geography:</span>{" "}
+                  {selectedPersona.geo}
+                </div>
+              )}
+              {selectedPersona.size && (
+                <div>
+                  <span className="font-semibold">Size:</span>{" "}
+                  {selectedPersona.size}
+                </div>
+              )}
+              {selectedPersona.industry && (
+                <div>
+                  <span className="font-semibold">Industry:</span>{" "}
+                  {selectedPersona.industry}
+                </div>
+              )}
+              {selectedPersona.job_title && (
+                <div>
+                  <span className="font-semibold">Job Title:</span>{" "}
+                  {selectedPersona.job_title}
+                </div>
+              )}
+              {selectedPersona.value && (
+                <div>
+                  <span className="font-semibold">Value:</span>{" "}
+                  {selectedPersona.value}
                 </div>
               )}
               <div className="pt-4">

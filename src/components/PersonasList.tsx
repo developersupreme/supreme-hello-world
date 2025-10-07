@@ -33,13 +33,6 @@ export const PersonasList = ({ onPersonaSelect }: PersonasListProps) => {
 
       // Dynamically import SDK to access PersonasClient at runtime
       const SDK = await import("@supreme-ai/si-sdk");
-      
-      // Initialize credit system for JWT token
-      const creditClient = new (SDK as any).CreditSystemClient({
-        apiBaseUrl: "https://v2.supremegroup.ai/api/secure-credits/jwt",
-        authUrl: "https://v2.supremegroup.ai/api/jwt",
-        autoInit: true
-      });
 
       // Initialize personas client - access from SDK default or named export
       const PersonasClientClass = (SDK as any).PersonasClient || (SDK as any).default?.PersonasClient;
@@ -49,10 +42,9 @@ export const PersonasList = ({ onPersonaSelect }: PersonasListProps) => {
       }
 
       const personasClient = new PersonasClientClass({
-        apiBaseUrl: "https://v2.supremegroup.ai/api",
+        apiBaseUrl: import.meta.env.VITE_PERSONAS_API_URL || "http://127.0.0.1:8000/api",
         getAuthToken: () => {
-          const auth = sessionStorage.getItem('creditSystem_auth');
-          return auth ? JSON.parse(auth).token : null;
+          return sessionStorage.getItem('creditSystem_accessToken');
         },
         debug: true
       });
@@ -124,8 +116,7 @@ export const PersonasList = ({ onPersonaSelect }: PersonasListProps) => {
         {personas.map((persona) => (
           <Card
             key={persona.id}
-            className="p-6 hover:shadow-lg transition-all duration-300 cursor-pointer border-2 hover:border-primary/50"
-            onClick={() => onPersonaSelect?.(persona)}
+            className="p-6 hover:shadow-lg transition-all duration-300 border-2"
           >
             <div className="flex items-center gap-4 mb-3">
               <div className="w-12 h-12 rounded-full bg-gradient-primary flex items-center justify-center">
@@ -136,13 +127,28 @@ export const PersonasList = ({ onPersonaSelect }: PersonasListProps) => {
                 <p className="text-xs text-muted-foreground">ID: {persona.id}</p>
               </div>
             </div>
-            
-            {persona.description && (
+
+            {persona.short_description && (
               <p className="text-sm text-muted-foreground mb-2">
-                {persona.description}
+                {persona.short_description}
               </p>
             )}
-            
+
+            <div className="space-y-1 text-xs text-muted-foreground">
+              {persona.job_title && (
+                <p><span className="font-semibold">Job Title:</span> {persona.job_title}</p>
+              )}
+              {persona.industry && (
+                <p><span className="font-semibold">Industry:</span> {persona.industry}</p>
+              )}
+              {persona.geo && (
+                <p><span className="font-semibold">Location:</span> {persona.geo}</p>
+              )}
+              {persona.size && (
+                <p><span className="font-semibold">Company Size:</span> {persona.size}</p>
+              )}
+            </div>
+
             {persona.category && (
               <div className="mt-3">
                 <span className="text-xs bg-primary/10 text-primary px-2 py-1 rounded-full">
