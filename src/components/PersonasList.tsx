@@ -1,6 +1,4 @@
 import { useState, useEffect } from "react";
-// @ts-ignore - SDK types may not be fully exported
-import * as SupremeAI from "@supreme-ai/si-sdk";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -33,15 +31,24 @@ export const PersonasList = ({ onPersonaSelect }: PersonasListProps) => {
     try {
       setLoading(true);
 
+      // Dynamically import SDK to access PersonasClient at runtime
+      const SDK = await import("@supreme-ai/si-sdk");
+      
       // Initialize credit system for JWT token
-      const creditClient = new (SupremeAI as any).CreditSystemClient({
+      const creditClient = new (SDK as any).CreditSystemClient({
         apiBaseUrl: "https://v2.supremegroup.ai/api/secure-credits/jwt",
         authUrl: "https://v2.supremegroup.ai/api/jwt",
         autoInit: true
       });
 
-      // Initialize personas client
-      const personasClient = new (SupremeAI as any).PersonasClient({
+      // Initialize personas client - access from SDK default or named export
+      const PersonasClientClass = (SDK as any).PersonasClient || (SDK as any).default?.PersonasClient;
+      
+      if (!PersonasClientClass) {
+        throw new Error("PersonasClient not available in SDK");
+      }
+
+      const personasClient = new PersonasClientClass({
         apiBaseUrl: "https://v2.supremegroup.ai/api",
         getAuthToken: () => {
           const auth = sessionStorage.getItem('creditSystem_auth');

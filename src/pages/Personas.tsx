@@ -1,6 +1,4 @@
 import { useState } from "react";
-// @ts-ignore - SDK types may not be fully exported
-import * as SupremeAI from "@supreme-ai/si-sdk";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -21,7 +19,15 @@ const Personas = () => {
 
   const fetchPersonaById = async (id: number) => {
     try {
-      const personasClient = new (SupremeAI as any).PersonasClient({
+      // Dynamically import SDK
+      const SDK = await import("@supreme-ai/si-sdk");
+      const PersonasClientClass = (SDK as any).PersonasClient || (SDK as any).default?.PersonasClient;
+      
+      if (!PersonasClientClass) {
+        throw new Error("PersonasClient not available in SDK");
+      }
+
+      const personasClient = new PersonasClientClass({
         apiBaseUrl: "https://v2.supremegroup.ai/api",
         getAuthToken: () => {
           const auth = sessionStorage.getItem('creditSystem_auth');
