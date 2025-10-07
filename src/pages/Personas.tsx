@@ -22,11 +22,11 @@ const Personas = () => {
   const navigate = useNavigate();
 
   // Debug mode flag - same as Auth
-  const DEBUG = false;
+  const DEBUG = true;
 
   useEffect(() => {
     if (DEBUG) {
-      console.log('[Personas DEBUG] 🚀 Component mounted');
+      console.log("[Personas DEBUG] 🚀 Component mounted");
     }
 
     // Detect if running in embedded mode (iframe)
@@ -34,27 +34,27 @@ const Personas = () => {
     setIsEmbedded(isInIframe);
 
     if (DEBUG) {
-      console.log('[Personas DEBUG] 🖼️ Running in iframe:', isInIframe);
+      console.log("[Personas DEBUG] 🖼️ Running in iframe:", isInIframe);
     }
 
-    const accessToken = sessionStorage.getItem('creditSystem_accessToken');
+    const accessToken = sessionStorage.getItem("creditSystem_accessToken");
 
     if (DEBUG) {
-      console.log('[Personas DEBUG] 🔑 Access token present:', !!accessToken);
+      console.log("[Personas DEBUG] 🔑 Access token present:", !!accessToken);
     }
 
     if (!accessToken) {
       if (DEBUG) {
-        console.warn('[Personas DEBUG] ❌ No access token, redirecting to /auth');
+        console.warn("[Personas DEBUG] ❌ No access token, redirecting to /auth");
       }
       navigate("/auth");
       return;
     }
 
-    const userStr = sessionStorage.getItem('creditSystem_user');
+    const userStr = sessionStorage.getItem("creditSystem_user");
 
     if (DEBUG) {
-      console.log('[Personas DEBUG] 👤 User data present:', !!userStr);
+      console.log("[Personas DEBUG] 👤 User data present:", !!userStr);
     }
 
     if (userStr) {
@@ -63,14 +63,14 @@ const Personas = () => {
       setUserName(userData.name || "");
 
       if (DEBUG) {
-        console.log('[Personas DEBUG] 👤 User loaded:', { name: userData.name, email: userData.email });
+        console.log("[Personas DEBUG] 👤 User loaded:", { name: userData.name, email: userData.email });
       }
     }
   }, [navigate, DEBUG]);
 
   const fetchPersonaById = async (id: number) => {
     if (DEBUG) {
-      console.log('[Personas DEBUG] 📋 Fetching persona by ID:', id);
+      console.log("[Personas DEBUG] 📋 Fetching persona by ID:", id);
     }
 
     try {
@@ -79,7 +79,7 @@ const Personas = () => {
       const PersonasClientClass = (SDK as any).PersonasClient || (SDK as any).default?.PersonasClient;
 
       if (DEBUG) {
-        console.log('[Personas DEBUG] ✅ SDK loaded, PersonasClient available:', !!PersonasClientClass);
+        console.log("[Personas DEBUG] ✅ SDK loaded, PersonasClient available:", !!PersonasClientClass);
       }
 
       if (!PersonasClientClass) {
@@ -89,27 +89,27 @@ const Personas = () => {
       const apiBaseUrl = import.meta.env.VITE_PERSONAS_API_URL || "http://127.0.0.1:8000/api";
 
       if (DEBUG) {
-        console.log('[Personas DEBUG] 🌐 API Base URL:', apiBaseUrl);
+        console.log("[Personas DEBUG] 🌐 API Base URL:", apiBaseUrl);
       }
 
       const personasClient = new PersonasClientClass({
         apiBaseUrl: apiBaseUrl,
         getAuthToken: () => {
-          return sessionStorage.getItem('creditSystem_accessToken');
+          return sessionStorage.getItem("creditSystem_accessToken");
         },
-        debug: DEBUG
+        debug: DEBUG,
       });
 
       if (DEBUG) {
-        console.log('[Personas DEBUG] 📤 Calling getPersonaById...');
+        console.log("[Personas DEBUG] 📤 Calling getPersonaById...");
       }
 
       const result = await personasClient.getPersonaById(id);
 
       if (DEBUG) {
-        console.log('[Personas DEBUG] 📥 Response:', {
+        console.log("[Personas DEBUG] 📥 Response:", {
           success: result.success,
-          hasPersona: !!result.persona
+          hasPersona: !!result.persona,
         });
       }
 
@@ -117,7 +117,7 @@ const Personas = () => {
         setSelectedPersona(result.persona);
 
         if (DEBUG) {
-          console.log('[Personas DEBUG] ✅ Persona loaded:', result.persona.name);
+          console.log("[Personas DEBUG] ✅ Persona loaded:", result.persona.name);
         }
 
         toast({
@@ -127,7 +127,7 @@ const Personas = () => {
       }
     } catch (error) {
       if (DEBUG) {
-        console.error('[Personas DEBUG] ❌ Error fetching persona:', error);
+        console.error("[Personas DEBUG] ❌ Error fetching persona:", error);
       }
       toast({
         title: "Error",
@@ -139,23 +139,23 @@ const Personas = () => {
 
   const handlePersonaSelect = (persona: Persona) => {
     if (DEBUG) {
-      console.log('[Personas DEBUG] 🖱️ Persona selected:', { id: persona.id, name: persona.name });
+      console.log("[Personas DEBUG] 🖱️ Persona selected:", { id: persona.id, name: persona.name });
     }
     fetchPersonaById(persona.id);
   };
 
   const handleLogout = () => {
     if (DEBUG) {
-      console.log('[Personas DEBUG] 👋 Logging out...');
+      console.log("[Personas DEBUG] 👋 Logging out...");
     }
 
-    sessionStorage.removeItem('creditSystem_accessToken');
-    sessionStorage.removeItem('creditSystem_refreshToken');
-    sessionStorage.removeItem('creditSystem_user');
+    sessionStorage.removeItem("creditSystem_accessToken");
+    sessionStorage.removeItem("creditSystem_refreshToken");
+    sessionStorage.removeItem("creditSystem_user");
 
     if (DEBUG) {
-      console.log('[Personas DEBUG] 🗑️ Session cleared');
-      console.log('[Personas DEBUG] 🔄 Redirecting to /auth');
+      console.log("[Personas DEBUG] 🗑️ Session cleared");
+      console.log("[Personas DEBUG] 🔄 Redirecting to /auth");
     }
 
     toast({
@@ -192,13 +192,9 @@ const Personas = () => {
               </div>
             </div>
           </Card>
-          
-          <h1 className="text-4xl font-bold mb-2 bg-gradient-primary bg-clip-text text-transparent">
-            My Personas
-          </h1>
-          <p className="text-muted-foreground">
-            View and manage your personas
-          </p>
+
+          <h1 className="text-4xl font-bold mb-2 bg-gradient-primary bg-clip-text text-transparent">My Personas</h1>
+          <p className="text-muted-foreground">View and manage your personas</p>
         </div>
 
         <PersonasList onPersonaSelect={handlePersonaSelect} />
@@ -207,27 +203,20 @@ const Personas = () => {
           <Card className="p-8 border-2 shadow-lg mt-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold">Persona Details</h2>
-              <Button 
-                variant="outline" 
-                size="sm"
-                onClick={() => setSelectedPersona(null)}
-              >
+              <Button variant="outline" size="sm" onClick={() => setSelectedPersona(null)}>
                 Close
               </Button>
             </div>
             <div className="space-y-3">
               <div>
-                <span className="font-semibold">Name:</span>{" "}
-                {selectedPersona.name}
+                <span className="font-semibold">Name:</span> {selectedPersona.name}
               </div>
               <div>
-                <span className="font-semibold">ID:</span>{" "}
-                {selectedPersona.id}
+                <span className="font-semibold">ID:</span> {selectedPersona.id}
               </div>
               {selectedPersona.short_description && (
                 <div>
-                  <span className="font-semibold">Short Description:</span>{" "}
-                  {selectedPersona.short_description}
+                  <span className="font-semibold">Short Description:</span> {selectedPersona.short_description}
                 </div>
               )}
               {selectedPersona.long_description && (
@@ -238,38 +227,32 @@ const Personas = () => {
               )}
               {selectedPersona.category && (
                 <div>
-                  <span className="font-semibold">Category:</span>{" "}
-                  {selectedPersona.category}
+                  <span className="font-semibold">Category:</span> {selectedPersona.category}
                 </div>
               )}
               {selectedPersona.geo && (
                 <div>
-                  <span className="font-semibold">Geography:</span>{" "}
-                  {selectedPersona.geo}
+                  <span className="font-semibold">Geography:</span> {selectedPersona.geo}
                 </div>
               )}
               {selectedPersona.size && (
                 <div>
-                  <span className="font-semibold">Size:</span>{" "}
-                  {selectedPersona.size}
+                  <span className="font-semibold">Size:</span> {selectedPersona.size}
                 </div>
               )}
               {selectedPersona.industry && (
                 <div>
-                  <span className="font-semibold">Industry:</span>{" "}
-                  {selectedPersona.industry}
+                  <span className="font-semibold">Industry:</span> {selectedPersona.industry}
                 </div>
               )}
               {selectedPersona.job_title && (
                 <div>
-                  <span className="font-semibold">Job Title:</span>{" "}
-                  {selectedPersona.job_title}
+                  <span className="font-semibold">Job Title:</span> {selectedPersona.job_title}
                 </div>
               )}
               {selectedPersona.value && (
                 <div>
-                  <span className="font-semibold">Value:</span>{" "}
-                  {selectedPersona.value}
+                  <span className="font-semibold">Value:</span> {selectedPersona.value}
                 </div>
               )}
               <div className="pt-4">
