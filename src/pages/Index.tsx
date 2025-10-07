@@ -23,21 +23,12 @@ const Index = () => {
         </p>
         
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link to="/credits">
+          <Link to="/auth">
             <Button
               size="lg"
               className="bg-gradient-primary hover:opacity-90 shadow-premium text-lg px-8"
             >
-              Get Started
-            </Button>
-          </Link>
-          <Link to="/personas">
-            <Button
-              size="lg"
-              variant="outline"
-              className="text-lg px-8 border-2"
-            >
-              My Personas
+              Sign In
             </Button>
           </Link>
         </div>

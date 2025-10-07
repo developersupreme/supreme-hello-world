@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
+import { ArrowLeft, User, Mail, LogOut } from "lucide-react";
+import { Link, useNavigate } from "react-router-dom";
 import { PersonasList } from "@/components/PersonasList";
 
 interface Persona {
@@ -15,7 +15,19 @@ interface Persona {
 
 const Personas = () => {
   const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null);
+  const [userEmail, setUserEmail] = useState<string>("");
   const { toast } = useToast();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const auth = sessionStorage.getItem('creditSystem_auth');
+    if (!auth) {
+      navigate("/auth");
+      return;
+    }
+    const authData = JSON.parse(auth);
+    setUserEmail(authData.email || "");
+  }, [navigate]);
 
   const fetchPersonaById = async (id: number) => {
     try {
@@ -59,16 +71,51 @@ const Personas = () => {
     fetchPersonaById(persona.id);
   };
 
+  const handleLogout = () => {
+    sessionStorage.removeItem('creditSystem_auth');
+    toast({
+      title: "Logged out",
+      description: "You have been logged out successfully",
+    });
+    navigate("/auth");
+  };
+
   return (
     <div className="min-h-screen bg-gradient-hero">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <Link to="/">
-            <Button variant="ghost" className="mb-4">
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Home
-            </Button>
-          </Link>
+          <div className="flex items-center justify-between mb-4">
+            <Link to="/">
+              <Button variant="ghost">
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Home
+              </Button>
+            </Link>
+            <div className="flex gap-2">
+              <Link to="/credits">
+                <Button variant="outline">Credit System</Button>
+              </Link>
+              <Button variant="destructive" onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </Button>
+            </div>
+          </div>
+
+          <Card className="p-6 border-2 shadow-lg mb-8">
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-full bg-gradient-primary flex items-center justify-center">
+                <User className="h-8 w-8 text-primary-foreground" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-bold">User Profile</h2>
+                <div className="flex items-center gap-2 text-muted-foreground mt-1">
+                  <Mail className="h-4 w-4" />
+                  <span>{userEmail}</span>
+                </div>
+              </div>
+            </div>
+          </Card>
           
           <h1 className="text-4xl font-bold mb-2 bg-gradient-primary bg-clip-text text-transparent">
             My Personas
