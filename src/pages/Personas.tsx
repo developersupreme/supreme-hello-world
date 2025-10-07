@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 // @ts-ignore - SDK types may not be fully exported
-import { PersonasClient, CreditSystemClient } from "@supreme-ai/si-sdk";
+import * as SupremeAI from "@supreme-ai/si-sdk";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -29,14 +29,14 @@ const Personas = () => {
       setLoading(true);
 
       // 1. Initialize credit system (for JWT token)
-      const creditClient = new CreditSystemClient({
+      const creditClient = new (SupremeAI as any).CreditSystemClient({
         apiBaseUrl: "https://v2.supremegroup.ai/api/secure-credits/jwt",
         authUrl: "https://v2.supremegroup.ai/api/jwt",
         autoInit: true
       });
 
       // 2. Initialize personas client
-      const personasClient = new PersonasClient({
+      const personasClient = new (SupremeAI as any).PersonasClient({
         apiBaseUrl: "https://v2.supremegroup.ai/api",
         getAuthToken: () => {
           const auth = sessionStorage.getItem('creditSystem_auth');
@@ -75,7 +75,7 @@ const Personas = () => {
 
   const fetchPersonaById = async (id: number) => {
     try {
-      const personasClient = new PersonasClient({
+      const personasClient = new (SupremeAI as any).PersonasClient({
         apiBaseUrl: "https://v2.supremegroup.ai/api",
         getAuthToken: () => {
           const auth = sessionStorage.getItem('creditSystem_auth');
