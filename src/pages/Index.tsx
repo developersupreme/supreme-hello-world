@@ -31,13 +31,15 @@ const Index = () => {
               Get Started
             </Button>
           </Link>
-          <Button
-            size="lg"
-            variant="outline"
-            className="text-lg px-8 border-2"
-          >
-            Learn More
-          </Button>
+          <Link to="/personas">
+            <Button
+              size="lg"
+              variant="outline"
+              className="text-lg px-8 border-2"
+            >
+              My Personas
+            </Button>
+          </Link>
         </div>
       </header>
 
