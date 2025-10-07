@@ -39,7 +39,7 @@ const Auth = () => {
           title: "Login successful",
           description: "Welcome back!",
         });
-        navigate("/dashboard");
+        navigate("/credits");
       } else {
         toast({
           title: "Login failed",
