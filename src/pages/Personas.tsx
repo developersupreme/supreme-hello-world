@@ -20,49 +20,106 @@ const Personas = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
+  // Debug mode flag - same as Auth
+  const DEBUG = true;
+
   useEffect(() => {
+    if (DEBUG) {
+      console.log('[Personas DEBUG] 🚀 Component mounted');
+    }
+
     const accessToken = sessionStorage.getItem('creditSystem_accessToken');
+
+    if (DEBUG) {
+      console.log('[Personas DEBUG] 🔑 Access token present:', !!accessToken);
+    }
+
     if (!accessToken) {
+      if (DEBUG) {
+        console.warn('[Personas DEBUG] ❌ No access token, redirecting to /auth');
+      }
       navigate("/auth");
       return;
     }
+
     const userStr = sessionStorage.getItem('creditSystem_user');
+
+    if (DEBUG) {
+      console.log('[Personas DEBUG] 👤 User data present:', !!userStr);
+    }
+
     if (userStr) {
       const userData = JSON.parse(userStr);
       setUserEmail(userData.email || "");
       setUserName(userData.name || "");
+
+      if (DEBUG) {
+        console.log('[Personas DEBUG] 👤 User loaded:', { name: userData.name, email: userData.email });
+      }
     }
-  }, [navigate]);
+  }, [navigate, DEBUG]);
 
   const fetchPersonaById = async (id: number) => {
+    if (DEBUG) {
+      console.log('[Personas DEBUG] 📋 Fetching persona by ID:', id);
+    }
+
     try {
       // Dynamically import SDK
       const SDK = await import("@supreme-ai/si-sdk");
       const PersonasClientClass = (SDK as any).PersonasClient || (SDK as any).default?.PersonasClient;
-      
+
+      if (DEBUG) {
+        console.log('[Personas DEBUG] ✅ SDK loaded, PersonasClient available:', !!PersonasClientClass);
+      }
+
       if (!PersonasClientClass) {
         throw new Error("PersonasClient not available in SDK");
       }
 
+      const apiBaseUrl = import.meta.env.VITE_PERSONAS_API_URL || "http://127.0.0.1:8000/api";
+
+      if (DEBUG) {
+        console.log('[Personas DEBUG] 🌐 API Base URL:', apiBaseUrl);
+      }
+
       const personasClient = new PersonasClientClass({
-        apiBaseUrl: import.meta.env.VITE_PERSONAS_API_URL || "http://127.0.0.1:8000/api",
+        apiBaseUrl: apiBaseUrl,
         getAuthToken: () => {
           return sessionStorage.getItem('creditSystem_accessToken');
         },
-        debug: true
+        debug: DEBUG
       });
 
+      if (DEBUG) {
+        console.log('[Personas DEBUG] 📤 Calling getPersonaById...');
+      }
+
       const result = await personasClient.getPersonaById(id);
-      
+
+      if (DEBUG) {
+        console.log('[Personas DEBUG] 📥 Response:', {
+          success: result.success,
+          hasPersona: !!result.persona
+        });
+      }
+
       if (result.success && result.persona) {
         setSelectedPersona(result.persona);
+
+        if (DEBUG) {
+          console.log('[Personas DEBUG] ✅ Persona loaded:', result.persona.name);
+        }
+
         toast({
           title: "Persona loaded",
           description: `Viewing details for ${result.persona.name}`,
         });
       }
     } catch (error) {
-      console.error("Error fetching persona:", error);
+      if (DEBUG) {
+        console.error('[Personas DEBUG] ❌ Error fetching persona:', error);
+      }
       toast({
         title: "Error",
         description: "Failed to fetch persona details",
@@ -72,13 +129,26 @@ const Personas = () => {
   };
 
   const handlePersonaSelect = (persona: Persona) => {
+    if (DEBUG) {
+      console.log('[Personas DEBUG] 🖱️ Persona selected:', { id: persona.id, name: persona.name });
+    }
     fetchPersonaById(persona.id);
   };
 
   const handleLogout = () => {
+    if (DEBUG) {
+      console.log('[Personas DEBUG] 👋 Logging out...');
+    }
+
     sessionStorage.removeItem('creditSystem_accessToken');
     sessionStorage.removeItem('creditSystem_refreshToken');
     sessionStorage.removeItem('creditSystem_user');
+
+    if (DEBUG) {
+      console.log('[Personas DEBUG] 🗑️ Session cleared');
+      console.log('[Personas DEBUG] 🔄 Redirecting to /auth');
+    }
+
     toast({
       title: "Logged out",
       description: "You have been logged out successfully",
