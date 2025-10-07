@@ -23,6 +23,9 @@ export const PersonasList = ({ onPersonaSelect }: PersonasListProps) => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
+  // Debug mode flag - matches Auth and Personas
+  const DEBUG = false;
+
   useEffect(() => {
     fetchPersonas();
   }, []);
@@ -46,7 +49,7 @@ export const PersonasList = ({ onPersonaSelect }: PersonasListProps) => {
         getAuthToken: () => {
           return sessionStorage.getItem('creditSystem_accessToken');
         },
-        debug: true
+        debug: DEBUG
       });
 
       const result = await personasClient.getPersonas();
