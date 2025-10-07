@@ -621,15 +621,17 @@ export default function CreditSystemDemo() {
             </Card>
           )}
 
-          {/* Logout */}
-          <Card>
-            <CardContent className="pt-6">
-              <Button onClick={logout} disabled={loading} variant="outline" className="w-full">
-                <LogOut className="mr-2 h-4 w-4" />
-                Logout
-              </Button>
-            </CardContent>
-          </Card>
+          {/* Logout - Only show in standalone mode */}
+          {!isEmbedded && (
+            <Card>
+              <CardContent className="pt-6">
+                <Button onClick={logout} disabled={loading} variant="outline" className="w-full">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </Button>
+              </CardContent>
+            </Card>
+          )}
         </div>
       )}
 

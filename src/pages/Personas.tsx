@@ -17,6 +17,7 @@ const Personas = () => {
   const [selectedPersona, setSelectedPersona] = useState<Persona | null>(null);
   const [userEmail, setUserEmail] = useState<string>("");
   const [userName, setUserName] = useState<string>("");
+  const [isEmbedded, setIsEmbedded] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -26,6 +27,14 @@ const Personas = () => {
   useEffect(() => {
     if (DEBUG) {
       console.log('[Personas DEBUG] 🚀 Component mounted');
+    }
+
+    // Detect if running in embedded mode (iframe)
+    const isInIframe = window.self !== window.top;
+    setIsEmbedded(isInIframe);
+
+    if (DEBUG) {
+      console.log('[Personas DEBUG] 🖼️ Running in iframe:', isInIframe);
     }
 
     const accessToken = sessionStorage.getItem('creditSystem_accessToken');
@@ -160,12 +169,14 @@ const Personas = () => {
     <div className="min-h-screen bg-gradient-hero">
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <div className="flex items-center justify-end mb-4">
-            <Button variant="destructive" onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
-          </div>
+          {!isEmbedded && (
+            <div className="flex items-center justify-end mb-4">
+              <Button variant="destructive" onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </Button>
+            </div>
+          )}
 
           <Card className="p-6 border-2 shadow-lg mb-8">
             <div className="flex items-center gap-4">
