@@ -16,7 +16,7 @@ const Auth = () => {
   const navigate = useNavigate();
 
   // Debug mode flag
-  const DEBUG = true;
+  const DEBUG = false;
 
   // Detect embedded mode and handle auto-login
   useEffect(() => {
