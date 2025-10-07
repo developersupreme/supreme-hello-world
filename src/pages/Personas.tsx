@@ -40,7 +40,7 @@ const Personas = () => {
       }
 
       const personasClient = new PersonasClientClass({
-        apiBaseUrl: "https://v2.supremegroup.ai/api",
+        apiBaseUrl: import.meta.env.VITE_PERSONAS_API_URL,
         getAuthToken: () => {
           const auth = sessionStorage.getItem('creditSystem_auth');
           return auth ? JSON.parse(auth).token : null;
