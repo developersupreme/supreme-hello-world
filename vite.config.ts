@@ -17,6 +17,6 @@ export default defineConfig(({ mode }) => ({
     dedupe: ["react", "react-dom"],
   },
   optimizeDeps: {
-    include: ["@supreme-ai/credit-sdk"],
+    include: ["@supreme-ai/si-sdk"],
   },
 }));

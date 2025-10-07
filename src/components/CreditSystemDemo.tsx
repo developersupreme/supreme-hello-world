@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { useCreditSystem, type Transaction } from "@supreme-ai/credit-sdk";
+import { useCreditSystem, type Transaction } from "@supreme-ai/si-sdk";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
