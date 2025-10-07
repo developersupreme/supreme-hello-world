@@ -40,7 +40,7 @@ const Personas = () => {
       }
 
       const personasClient = new PersonasClientClass({
-        apiBaseUrl: import.meta.env.VITE_PERSONAS_API_URL,
+        apiBaseUrl: "https://v2.supremegroup.ai/api",
         getAuthToken: () => {
           const auth = sessionStorage.getItem('creditSystem_auth');
           return auth ? JSON.parse(auth).token : null;
@@ -85,16 +85,21 @@ const Personas = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
-            <Link to="/credits">
+            <Link to="/">
               <Button variant="ghost">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back
+                Back to Home
               </Button>
             </Link>
-            <Button variant="destructive" onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
+            <div className="flex gap-2">
+              <Link to="/credits">
+                <Button variant="outline">Credit System</Button>
+              </Link>
+              <Button variant="destructive" onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Logout
+              </Button>
+            </div>
           </div>
 
           <Card className="p-6 border-2 shadow-lg mb-8">

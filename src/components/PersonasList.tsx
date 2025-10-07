@@ -36,8 +36,8 @@ export const PersonasList = ({ onPersonaSelect }: PersonasListProps) => {
       
       // Initialize credit system for JWT token
       const creditClient = new (SDK as any).CreditSystemClient({
-        apiBaseUrl: import.meta.env.VITE_API_BASE_URL,
-        authUrl: import.meta.env.VITE_AUTH_URL,
+        apiBaseUrl: "https://v2.supremegroup.ai/api/secure-credits/jwt",
+        authUrl: "https://v2.supremegroup.ai/api/jwt",
         autoInit: true
       });
 
@@ -49,7 +49,7 @@ export const PersonasList = ({ onPersonaSelect }: PersonasListProps) => {
       }
 
       const personasClient = new PersonasClientClass({
-        apiBaseUrl: import.meta.env.VITE_PERSONAS_API_URL,
+        apiBaseUrl: "https://v2.supremegroup.ai/api",
         getAuthToken: () => {
           const auth = sessionStorage.getItem('creditSystem_auth');
           return auth ? JSON.parse(auth).token : null;
