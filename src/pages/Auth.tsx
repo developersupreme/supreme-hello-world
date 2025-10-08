@@ -15,8 +15,8 @@ const Auth = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Debug mode flag - controlled via VITE_DEV_MODE env variable
-  const DEBUG = import.meta.env.VITE_DEV_MODE === 'true';
+  // Debug mode flag
+  const DEBUG = false;
 
   // Detect embedded mode and handle auto-login
   useEffect(() => {
