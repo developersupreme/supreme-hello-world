@@ -21,8 +21,8 @@ const Personas = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
 
-  // Debug mode flag - same as Auth
-  const DEBUG = false;
+  // Debug mode flag - controlled via VITE_DEV_MODE env variable
+  const DEBUG = import.meta.env.VITE_DEV_MODE === 'true';
 
   useEffect(() => {
     if (DEBUG) {

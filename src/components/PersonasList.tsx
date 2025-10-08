@@ -23,8 +23,8 @@ export const PersonasList = ({ onPersonaSelect }: PersonasListProps) => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  // Debug mode flag - matches Auth and Personas
-  const DEBUG = false;
+  // Debug mode flag - controlled via VITE_DEV_MODE env variable
+  const DEBUG = import.meta.env.VITE_DEV_MODE === 'true';
 
   useEffect(() => {
     fetchPersonas();
