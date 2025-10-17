@@ -68,6 +68,8 @@ export default function CreditSystemDemo() {
     autoInit: true,
     debug: DEBUG,
     parentTimeout: 15000, // 15 seconds to wait for parent response (increased from 5s due to Laravel processing time)
+    tokenRefreshInterval: 600000, // 10 minutes (600000ms) - refresh before 15 min expiration - PRODUCTION
+    balanceRefreshInterval: 5000, // 5 seconds - automatic balance refresh
     allowedOrigins: (import.meta.env.VITE_ALLOWED_PARENTS || "")
       .split(",")
       .map((domain) => domain.trim())
