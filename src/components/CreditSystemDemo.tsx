@@ -47,7 +47,7 @@ export default function CreditSystemDemo() {
   // Note: SDK manages its own storage with 'creditSystem_' prefix
 
   // Debug mode flag
-  const DEBUG = true;
+  const DEBUG = false;
 
   const {
     isAuthenticated,
