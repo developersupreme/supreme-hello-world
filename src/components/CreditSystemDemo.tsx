@@ -1,16 +1,13 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useCreditSystem, type Transaction } from "@supreme-ai/si-sdk";
 import { toast } from "sonner";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   CreditCard,
   LogIn,
@@ -20,34 +17,52 @@ import {
   Minus,
   History,
   User,
-  AlertCircle,
   Eye,
   EyeOff,
-  X,
+  CheckCircle2,
+  XCircle,
+  ChevronLeft,
+  ChevronRight,
+  Calendar,
+  Tag,
 } from "lucide-react";
+
+// Event log entry type
+type LogEntry = {
+  id: string;
+  message: string;
+  type: "info" | "success" | "error" | "warning";
+  timestamp: Date;
+};
 
 export default function CreditSystemDemo() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // Transaction history with pagination
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([]);
-  const [showHistory, setShowHistory] = useState(true); // Changed to true to always show
-  const [retryCount, setRetryCount] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalTransactions, setTotalTransactions] = useState(0);
+  const transactionsPerPage = 10;
+
+  // Loading states
   const [balanceLoaded, setBalanceLoaded] = useState(false);
   const [historyRefreshing, setHistoryRefreshing] = useState(false);
   const [balanceRefreshing, setBalanceRefreshing] = useState(false);
 
-  // Form states for custom transactions
+  // Form states for transactions
   const [spendAmount, setSpendAmount] = useState("");
   const [spendDescription, setSpendDescription] = useState("");
   const [addAmount, setAddAmount] = useState("");
   const [addDescription, setAddDescription] = useState("");
-  const [addType, setAddType] = useState<"bonus" | "refund" | "manual">("bonus");
 
-  // Note: SDK manages its own storage with 'creditSystem_' prefix
+  // Event logs
+  const [logs, setLogs] = useState<LogEntry[]>([]);
 
-  // Debug mode flag
-  const DEBUG = false;
+  // Debug mode from env
+  const DEBUG = import.meta.env.VITE_DEBUG === "true";
 
   const {
     isAuthenticated,
@@ -63,39 +78,100 @@ export default function CreditSystemDemo() {
     addCredits,
     getHistory,
   } = useCreditSystem({
-    apiBaseUrl: import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000/api/secure-credits/jwt",
-    authUrl: import.meta.env.VITE_AUTH_URL || "http://127.0.0.1:8000/api/jwt",
+    apiBaseUrl: import.meta.env.VITE_SUPREME_AI_API_BASE_URL || "https://app.supremegroup.ai/api/secure-credits/jwt",
+    authUrl: import.meta.env.VITE_SUPREME_AI_AUTH_URL || "https://app.supremegroup.ai/api/jwt",
     autoInit: true,
     debug: DEBUG,
-    parentTimeout: 15000, // 15 seconds to wait for parent response (increased from 5s due to Laravel processing time)
-    tokenRefreshInterval: 600000, // 10 minutes (600000ms) - refresh before 15 min expiration - PRODUCTION
-    balanceRefreshInterval: 5000, // 5 seconds - automatic balance refresh
+    parentTimeout: 15000,
+    tokenRefreshInterval: 600000,
+    balanceRefreshInterval: 0, // Manual refresh only
     allowedOrigins: (import.meta.env.VITE_ALLOWED_PARENTS || "")
       .split(",")
       .map((domain) => domain.trim())
       .filter(Boolean),
   });
 
-  // Debug logging
-  useEffect(() => {
-    if (DEBUG) {
-      console.log("[CreditSystemDemo] State:", { isAuthenticated, mode, loading, error });
-    }
-  }, [isAuthenticated, mode, loading, error]);
-
   const isEmbedded = mode === "embedded";
 
-  // Track when balance is fetched (null means not fetched yet)
+  // Logging utility
+  const log = useCallback((message: string, type: LogEntry["type"] = "info") => {
+    const logEntry: LogEntry = {
+      id: `${Date.now()}-${Math.random()}`,
+      message,
+      type,
+      timestamp: new Date(),
+    };
+    setLogs((prev) => [...prev, logEntry]);
+
+    if (DEBUG) {
+      const timestamp = logEntry.timestamp.toLocaleTimeString();
+      console.log(`[${timestamp}] ${message}`);
+    }
+  }, [DEBUG]);
+
+  // Initialize logging
+  useEffect(() => {
+    log("🚀 Credit System initialized", "info");
+    log(`📍 Running on: ${window.location.origin}`, "info");
+    log(`🔧 Debug mode: ${DEBUG ? "ON" : "OFF"}`, "info");
+  }, []);
+
+  // Log mode detection
+  useEffect(() => {
+    if (mode) {
+      log(`🔍 Mode detected: ${mode.toUpperCase()}`, "info");
+    }
+  }, [mode]);
+
+  // Log authentication status changes
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      log(`✅ SDK ready in ${mode} mode! User: ${user.email}`, "success");
+      // Auto-load transaction history
+      loadTransactionHistory(1);
+    } else if (isAuthenticated === false) {
+      log("🔑 Authentication required - please login", "warning");
+    }
+  }, [isAuthenticated, user, mode]);
+
+  // Log balance updates
   useEffect(() => {
     if (isAuthenticated && balance !== null) {
-      // Balance has been fetched (even if it's 0)
       setBalanceLoaded(true);
+      log(`💰 Balance updated: ${balance.toLocaleString()} credits`, "info");
     } else {
-      // Reset when not authenticated or balance is null
       setBalanceLoaded(false);
     }
-  }, [isAuthenticated, balance]);
+  }, [balance, isAuthenticated]);
 
+  // Log errors
+  useEffect(() => {
+    if (error) {
+      log(`❌ Error: ${error}`, "error");
+    }
+  }, [error]);
+
+  // Load transaction history
+  const loadTransactionHistory = async (page: number = 1) => {
+    setHistoryRefreshing(true);
+    log(`📜 Loading transaction history (page ${page})...`, "info");
+
+    const result = await getHistory(page, transactionsPerPage);
+
+    if (result.success && result.transactions) {
+      setTransactionHistory(result.transactions);
+      setCurrentPage(result.page || page);
+      setTotalPages(result.pages || 1);
+      setTotalTransactions(result.total || 0);
+      log(`✅ Loaded ${result.transactions.length} transactions (page ${result.page}/${result.pages})`, "success");
+    } else {
+      log(`❌ Failed to load transactions: ${result.error || "Unknown error"}`, "error");
+    }
+
+    setTimeout(() => setHistoryRefreshing(false), 600);
+  };
+
+  // Handle login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
@@ -104,28 +180,36 @@ export default function CreditSystemDemo() {
 
     const result = await login(email, password);
     if (result.success) {
-      if (DEBUG) console.log("Login successful!", result);
-      // Reset balance loaded to show loading state
+      log(`✅ Login successful! Welcome ${result.user?.email}`, "success");
       setBalanceLoaded(false);
-      // Fetch balance after a short delay to ensure tokens are set
+
+      // Fetch balance after a short delay
       setTimeout(async () => {
         const balanceResult = await checkBalance();
-        if (DEBUG) console.log("Balance result:", balanceResult);
-        // Only set loaded to true if the fetch was successful
         if (balanceResult && balanceResult.success) {
           setBalanceLoaded(true);
         }
       }, 100);
-      // Clear form
+
       setEmail("");
       setPassword("");
+    } else {
+      log(`❌ Login failed: ${result.error}`, "error");
     }
   };
 
+  // Handle logout
+  const handleLogout = async () => {
+    await logout();
+    log("👋 Logged out successfully", "info");
+    setTransactionHistory([]);
+    setLogs([]);
+  };
+
+  // Handle spend credits
   const handleSpendCredits = async (e?: React.FormEvent) => {
     e?.preventDefault();
 
-    // Check if amount field is empty
     if (!spendAmount || spendAmount.trim() === "") {
       toast.error("Please enter an amount to spend");
       return;
@@ -133,7 +217,6 @@ export default function CreditSystemDemo() {
 
     const amount = parseInt(spendAmount);
 
-    // Validate numeric value
     if (isNaN(amount) || amount <= 0) {
       toast.error("Please enter a valid positive amount");
       return;
@@ -144,29 +227,30 @@ export default function CreditSystemDemo() {
       return;
     }
 
-    const description = spendDescription.trim() || "Credit spend from Lovable app";
+    const description = spendDescription.trim() || undefined;
 
+    log(`💸 Spending ${amount} credits...`, "info");
     const result = await spendCredits(amount, description);
+
     if (result.success) {
-      if (DEBUG) console.log(`Spent ${amount} credits. New balance: ${result.newBalance}`);
+      log(`💸 Spent ${amount} credits. New balance: ${result.newBalance?.toLocaleString()}`, "success");
       toast.success(`Successfully spent ${amount} credits`);
       setSpendAmount("");
       setSpendDescription("");
-      // Immediately refresh balance
+
+      // Refresh data
       await checkBalance();
-      // Automatically refresh transaction history if it's visible
-      if (showHistory) {
-        await handleGetHistory();
-      }
-    } else if (result.error) {
-      toast.error(result.error);
+      await loadTransactionHistory(1);
+    } else {
+      log(`❌ Failed to spend credits: ${result.error}`, "error");
+      toast.error(result.error || "Failed to spend credits");
     }
   };
 
+  // Handle add credits
   const handleAddCredits = async (e?: React.FormEvent) => {
     e?.preventDefault();
 
-    // Check if amount field is empty
     if (!addAmount || addAmount.trim() === "") {
       toast.error("Please enter an amount to add");
       return;
@@ -174,114 +258,161 @@ export default function CreditSystemDemo() {
 
     const amount = parseInt(addAmount);
 
-    // Validate numeric value
     if (isNaN(amount) || amount <= 0) {
       toast.error("Please enter a valid positive amount");
       return;
     }
 
-    const description = addDescription.trim() || "Credit addition from Lovable app";
+    const description = addDescription.trim() || undefined;
 
-    const result = await addCredits(amount, addType, description);
+    log(`➕ Adding ${amount} credits...`, "info");
+    const result = await addCredits(amount, "manual", description);
+
     if (result.success) {
-      if (DEBUG) console.log(`Added ${amount} credits. New balance: ${result.newBalance}`);
+      log(`➕ Added ${amount} credits. New balance: ${result.newBalance?.toLocaleString()}`, "success");
       toast.success(`Successfully added ${amount} credits`);
       setAddAmount("");
       setAddDescription("");
-      // Immediately refresh balance
+
+      // Refresh data
       await checkBalance();
-      // Automatically refresh transaction history if it's visible
-      if (showHistory) {
-        await handleGetHistory();
-      }
-    } else if (result.error) {
-      toast.error(result.error);
+      await loadTransactionHistory(1);
+    } else {
+      log(`❌ Failed to add credits: ${result.error}`, "error");
+      toast.error(result.error || "Failed to add credits");
     }
   };
 
+  // Handle balance refresh
   const handleRefreshBalance = async () => {
     setBalanceRefreshing(true);
+    log("📊 Checking balance...", "info");
+
     const result = await checkBalance();
     if (result && result.success) {
       setBalanceLoaded(true);
     }
-    // Keep the animation for a moment to make it visible
+
     setTimeout(() => setBalanceRefreshing(false), 600);
   };
 
-  const handleGetHistory = async () => {
-    setHistoryRefreshing(true);
-    const result = await getHistory(1, 10);
-    if (result.success && result.transactions) {
-      if (DEBUG) console.log("Transaction history:", result.transactions);
-      setTransactionHistory(result.transactions || []);
-      setShowHistory(true);
-    }
-    // Keep the animation for a moment to make it visible
-    setTimeout(() => setHistoryRefreshing(false), 600);
+  // Clear logs
+  const handleClearLogs = () => {
+    setLogs([]);
+    log("🧹 Logs cleared", "info");
   };
 
-  // Auto-refresh history when it becomes visible
-  useEffect(() => {
-    if (showHistory && isAuthenticated) {
-      handleGetHistory();
+  // Get organization name
+  const getOrganizationName = () => {
+    if (!user?.organizations) return "-";
+    const organizations = user.organizations as any[];
+    const selectedOrg = organizations?.find((org: any) => org.selectedStatus === true);
+    return selectedOrg?.name || "-";
+  };
+
+  // Get transaction type label
+  const getTransactionTypeLabel = (type: string) => {
+    const debitTypes = ["debit", "deduct", "spend", "spent"];
+    const txType = type?.toLowerCase();
+
+    if (debitTypes.includes(txType)) {
+      return "Credit Spent";
+    } else if (txType === "manual") {
+      return "Credit Added (Manual)";
+    } else if (txType === "bonus") {
+      return "Bonus Credit";
+    } else if (txType === "refund") {
+      return "Refund Credit";
+    } else {
+      return "Credit Added";
     }
-  }, [showHistory, isAuthenticated]);
+  };
+
+  // Check if transaction is credit
+  const isTransactionCredit = (type: string) => {
+    const debitTypes = ["debit", "deduct", "spend", "spent"];
+    return !debitTypes.includes(type?.toLowerCase());
+  };
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl">
+    <div className="container mx-auto p-4 md:p-6 max-w-7xl">
+      {/* Header */}
       <div className="mb-6">
-        <h1 className="text-3xl font-bold mb-2">Supreme AI Credit System</h1>
-        <div className="flex gap-2">
-          <Badge variant={isEmbedded ? "secondary" : "default"}>
-            Mode: {isEmbedded ? "Embedded (iframe)" : "Standalone"}
+        <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-indigo-600 to-emerald-500 bg-clip-text text-transparent">
+          💳 Credit System
+        </h1>
+        <div className="flex flex-wrap gap-2">
+          <Badge
+            variant={isEmbedded ? "secondary" : "default"}
+            className={`text-sm ${isEmbedded ? "bg-gradient-to-r from-pink-400 to-red-400" : "bg-gradient-to-r from-indigo-500 to-purple-600"}`}
+          >
+            Mode: {isEmbedded ? "EMBEDDED" : "STANDALONE"}
           </Badge>
-          <Badge variant={isAuthenticated ? "default" : "outline"}>
-            Authenticated: {isAuthenticated ? "Yes" : "No"}
+          <Badge variant={isAuthenticated ? "default" : "outline"} className="text-sm">
+            {isAuthenticated ? "✅" : "❌"} {isAuthenticated ? "Authenticated" : "Not Authenticated"}
           </Badge>
         </div>
       </div>
 
-      {loading && (
-        <Alert className="mb-4">
-          <RefreshCw className="h-4 w-4 animate-spin" />
-          <AlertDescription>Loading...</AlertDescription>
-        </Alert>
-      )}
-
-      {error && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>Error: {error}</AlertDescription>
-        </Alert>
-      )}
+      {/* Authentication Status Card */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="text-xl">🔐 Authentication Status</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+            <div className="bg-gray-50 rounded-lg p-3 border">
+              <div className="text-xs text-muted-foreground mb-1">Initialized:</div>
+              <div className="text-sm font-bold">{isAuthenticated !== undefined ? "✅" : "❌"}</div>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3 border">
+              <div className="text-xs text-muted-foreground mb-1">Authenticated:</div>
+              <div className="text-sm font-bold">{isAuthenticated ? "✅" : "❌"}</div>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3 border">
+              <div className="text-xs text-muted-foreground mb-1">User:</div>
+              <div className="text-sm font-bold truncate">{user?.email || "-"}</div>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3 border">
+              <div className="text-xs text-muted-foreground mb-1">Organization:</div>
+              <div className="text-sm font-bold truncate">{getOrganizationName()}</div>
+            </div>
+            <div className="bg-gray-50 rounded-lg p-3 border">
+              <div className="text-xs text-muted-foreground mb-1">Balance:</div>
+              <div className="text-sm font-bold text-emerald-600">{balance?.toLocaleString() || 0}</div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {!isAuthenticated ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <LogIn className="h-5 w-5" />
-              {isEmbedded ? "Authenticating..." : "Login to Supreme AI"}
-            </CardTitle>
-            <CardDescription>
-              {isEmbedded ? (
-                <>
-                  <span className="text-xs text-muted-foreground hidden">
-                    Authentication is handled by the parent application.
-                  </span>
-                  <br />
-                  <span className="text-xs text-muted-foreground">Getting credentials from Laravel session...</span>
-                  <br />
-                  <span className="text-xs text-yellow-600 hidden">Will retry every 15 seconds if not received</span>
-                </>
-              ) : (
-                "Enter your credentials to access the credit system"
-              )}
-            </CardDescription>
-          </CardHeader>
+        <>
+          {/* Embedded Mode Info */}
+          {isEmbedded && (
+            <Card className="mb-6">
+              <CardHeader>
+                <CardTitle className="text-xl">📡 Embedded Mode</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+                  <p className="text-sm text-blue-900 mb-2">⏳ Waiting for authentication from parent window...</p>
+                  <div className="text-xs text-blue-700">
+                    <span className="font-medium">Parent Origin:</span> {import.meta.env.VITE_ALLOWED_PARENTS?.split(",")[0] || "N/A"}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
+          {/* Login Form (Standalone Mode) */}
           {!isEmbedded && (
-            <>
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <LogIn className="h-5 w-5" />
+                  Login
+                </CardTitle>
+              </CardHeader>
               <form onSubmit={handleLogin}>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
@@ -294,7 +425,6 @@ export default function CreditSystemDemo() {
                       onChange={(e) => setEmail(e.target.value)}
                       required
                       disabled={loading}
-                      autoComplete="email"
                     />
                   </div>
                   <div className="space-y-2">
@@ -308,61 +438,28 @@ export default function CreditSystemDemo() {
                         onChange={(e) => setPassword(e.target.value)}
                         required
                         disabled={loading}
-                        autoComplete="current-password"
                       />
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                        className="absolute right-0 top-0 h-full px-3"
                         onClick={() => setShowPassword(!showPassword)}
-                        disabled={loading}
                       >
                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </Button>
                     </div>
                   </div>
                 </CardContent>
-                <CardFooter className="flex flex-col space-y-4">
+                <CardFooter>
                   <Button type="submit" disabled={loading} className="w-full">
-                    {loading ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Logging in...
-                      </>
-                    ) : (
-                      "Login"
-                    )}
+                    {loading ? "Logging in..." : "Login"}
                   </Button>
-
-                  <div className="w-full space-y-2 text-sm text-muted-foreground hidden">
-                    <p className="font-medium">Available users:</p>
-                    <ul className="list-disc list-inside space-y-1">
-                      <li>admin@supremeopti.com</li>
-                      <li>developer@supremeopti.com</li>
-                      <li>supreme.developer@supremeopti.com</li>
-                      <li>pranay.kosulkar@supremeopti.com</li>
-                    </ul>
-                    <p className="text-xs">Password: Ask your administrator</p>
-
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        sessionStorage.clear();
-                        window.location.reload();
-                      }}
-                      className="w-full mt-2"
-                    >
-                      Clear Session Data (if having issues)
-                    </Button>
-                  </div>
                 </CardFooter>
               </form>
-            </>
+            </Card>
           )}
-        </Card>
+        </>
       ) : (
         <div className="space-y-6">
           {/* User Info and Balance */}
@@ -374,16 +471,14 @@ export default function CreditSystemDemo() {
                   User Information
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
-                  <div>
-                    <span className="text-sm text-muted-foreground">Welcome,</span>
-                    <p className="text-lg font-semibold">{user?.name || user?.email}</p>
-                  </div>
-                  <div>
-                    <span className="text-sm text-muted-foreground">User ID:</span>
-                    <p className="text-sm font-mono">{user?.id}</p>
-                  </div>
+              <CardContent className="space-y-2">
+                <div>
+                  <span className="text-sm text-muted-foreground">Welcome,</span>
+                  <p className="text-lg font-semibold">{user?.name || user?.email}</p>
+                </div>
+                <div>
+                  <span className="text-sm text-muted-foreground">User ID:</span>
+                  <p className="text-sm font-mono">{user?.id}</p>
                 </div>
               </CardContent>
             </Card>
@@ -400,20 +495,13 @@ export default function CreditSystemDemo() {
                     variant="ghost"
                     onClick={handleRefreshBalance}
                     disabled={loading || balanceRefreshing}
-                    title="Refresh balance"
                   >
-                    <RefreshCw
-                      className="h-4 w-4"
-                      style={{
-                        animation: balanceRefreshing ? "spin 0.6s ease-in-out" : "none",
-                        transition: "transform 0.2s",
-                      }}
-                    />
+                    <RefreshCw className={`h-4 w-4 ${balanceRefreshing ? "animate-spin" : ""}`} />
                   </Button>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">
+                <div className="text-3xl font-bold text-emerald-600">
                   {!balanceLoaded || balance === null ? (
                     <span className="text-2xl text-muted-foreground">Loading...</span>
                   ) : (
@@ -424,222 +512,261 @@ export default function CreditSystemDemo() {
             </Card>
           </div>
 
-          {/* Operations */}
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Spend Credits Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Minus className="h-5 w-5 text-destructive" />
-                  Spend Credits
-                </CardTitle>
-                <CardDescription>Deduct credits from your balance</CardDescription>
-              </CardHeader>
-              <form onSubmit={handleSpendCredits}>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="spend-amount">Amount</Label>
+          {/* Credit Operations */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-xl">💰 Credit Operations</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {/* Check Balance */}
+              <div className="pb-6 border-b">
+                <h3 className="text-lg font-semibold mb-3">Check Balance</h3>
+                <Button onClick={handleRefreshBalance} disabled={loading} className="bg-indigo-600 hover:bg-indigo-700">
+                  <RefreshCw className="mr-2 h-4 w-4" />
+                  Refresh Balance
+                </Button>
+              </div>
+
+              {/* Spend Credits */}
+              <div className="pb-6 border-b">
+                <h3 className="text-lg font-semibold mb-3">Spend Credits</h3>
+                <form onSubmit={handleSpendCredits} className="space-y-3">
+                  <div className="flex flex-wrap gap-3">
                     <Input
-                      id="spend-amount"
                       type="number"
-                      placeholder="Enter amount to spend"
+                      placeholder="Amount"
                       value={spendAmount}
                       onChange={(e) => setSpendAmount(e.target.value)}
                       min="1"
-                      max={balance ?? undefined}
-                      disabled={loading}
+                      className="flex-1 min-w-[150px]"
                     />
-                    {balance === 0 && <p className="text-xs text-destructive">No credits available</p>}
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="spend-description">Description (Optional)</Label>
-                    <Textarea
-                      id="spend-description"
-                      placeholder="What are you spending credits on?"
+                    <Input
+                      type="text"
+                      placeholder="Description (optional)"
                       value={spendDescription}
                       onChange={(e) => setSpendDescription(e.target.value)}
-                      disabled={loading}
-                      rows={3}
+                      className="flex-1 min-w-[200px]"
                     />
+                    <Button type="submit" variant="destructive" className="flex-shrink-0">
+                      <Minus className="mr-2 h-4 w-4" />
+                      Spend Credits
+                    </Button>
                   </div>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" variant="destructive" disabled={loading || balance === 0} className="w-full">
-                    {loading ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Minus className="mr-2 h-4 w-4" />
-                        Spend Credits
-                      </>
-                    )}
-                  </Button>
-                </CardFooter>
-              </form>
-            </Card>
+                </form>
+              </div>
 
-            {/* Add Credits Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Plus className="h-5 w-5 text-green-600" />
-                  Add Credits
-                </CardTitle>
-                <CardDescription>Add credits to your balance</CardDescription>
-              </CardHeader>
-              <form onSubmit={handleAddCredits}>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="add-amount">Amount</Label>
+              {/* Add Credits */}
+              <div className="pb-6 border-b">
+                <h3 className="text-lg font-semibold mb-3">Add Credits</h3>
+                <form onSubmit={handleAddCredits} className="space-y-3">
+                  <div className="flex flex-wrap gap-3">
                     <Input
-                      id="add-amount"
                       type="number"
-                      placeholder="Enter amount to add"
+                      placeholder="Amount"
                       value={addAmount}
                       onChange={(e) => setAddAmount(e.target.value)}
                       min="1"
-                      disabled={loading}
+                      className="flex-1 min-w-[150px]"
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="add-type">Transaction Type</Label>
-                    <Select value={addType} onValueChange={(value: "bonus" | "refund" | "manual") => setAddType(value)}>
-                      <SelectTrigger id="add-type">
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="bonus">Bonus Credits</SelectItem>
-                        <SelectItem value="refund">Refund</SelectItem>
-                        <SelectItem value="manual">Manual Adjustment</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="add-description">Description (Optional)</Label>
-                    <Textarea
-                      id="add-description"
-                      placeholder="Reason for adding credits"
+                    <Input
+                      type="text"
+                      placeholder="Description (optional)"
                       value={addDescription}
                       onChange={(e) => setAddDescription(e.target.value)}
-                      disabled={loading}
-                      rows={3}
+                      className="flex-1 min-w-[200px]"
                     />
+                    <Button type="submit" className="flex-shrink-0 bg-emerald-600 hover:bg-emerald-700">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Credits
+                    </Button>
                   </div>
-                </CardContent>
-                <CardFooter>
-                  <Button type="submit" disabled={loading} className="w-full bg-green-600 hover:bg-green-700">
-                    {loading ? (
-                      <>
-                        <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <Plus className="mr-2 h-4 w-4" />
-                        Add Credits
-                      </>
-                    )}
+                </form>
+              </div>
+
+              {/* Logout */}
+              {!isEmbedded && (
+                <div>
+                  <Button onClick={handleLogout} disabled={loading} variant="outline" className="w-full">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Logout
                   </Button>
-                </CardFooter>
-              </form>
-            </Card>
-          </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* Transaction History */}
-          {showHistory && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span className="flex items-center gap-2">
-                    <History className="h-5 w-5" />
-                    Transaction History
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <History className="h-5 w-5" />
+                  📜 Transaction History
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => loadTransactionHistory(currentPage)}
+                  disabled={loading || historyRefreshing}
+                >
+                  <RefreshCw className={`h-4 w-4 ${historyRefreshing ? "animate-spin" : ""}`} />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[600px] rounded-lg border bg-gray-50 p-4">
+                {transactionHistory.length === 0 ? (
+                  <div className="text-center py-12 text-muted-foreground">
+                    <History className="h-16 w-16 mx-auto mb-4 opacity-30" />
+                    <p className="text-lg">📭 No transactions yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {transactionHistory.map((tx) => {
+                      const isCredit = isTransactionCredit(tx.type);
+                      const typeLabel = getTransactionTypeLabel(tx.type);
+                      const date = new Date(tx.created_at).toLocaleString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      });
+
+                      return (
+                        <Card
+                          key={tx.id}
+                          className={`transition-all hover:shadow-lg hover:-translate-y-1 border-l-4 ${
+                            isCredit ? "border-l-emerald-500 bg-gradient-to-r from-emerald-50 to-white" : "border-l-red-500 bg-gradient-to-r from-red-50 to-white"
+                          }`}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex justify-between items-start gap-4">
+                              <div className="flex items-start gap-3 flex-1">
+                                <div
+                                  className={`w-11 h-11 rounded-lg flex items-center justify-center shadow-md ${
+                                    isCredit ? "bg-gradient-to-br from-emerald-500 to-emerald-600" : "bg-gradient-to-br from-red-500 to-red-600"
+                                  }`}
+                                >
+                                  {isCredit ? (
+                                    <CheckCircle2 className="h-6 w-6 text-white" />
+                                  ) : (
+                                    <XCircle className="h-6 w-6 text-white" />
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className={`text-sm font-semibold ${isCredit ? "text-emerald-700" : "text-red-700"}`}>
+                                      {typeLabel}
+                                    </span>
+                                  </div>
+                                  <p className="text-sm text-gray-700 mb-2">
+                                    {tx.description || <span className="italic text-gray-400">No description provided</span>}
+                                  </p>
+                                  <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                                    <span className="flex items-center gap-1">
+                                      <Calendar className="h-3 w-3" />
+                                      {date}
+                                    </span>
+                                    {tx.reference_id && (
+                                      <span className="flex items-center gap-1">
+                                        <Tag className="h-3 w-3" />
+                                        {tx.reference_id}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right flex-shrink-0">
+                                <div className={`text-xl font-bold mb-1 ${isCredit ? "text-emerald-600" : "text-red-600"}`}>
+                                  {isCredit ? "+" : "-"}
+                                  {Math.abs(tx.amount).toLocaleString()}
+                                </div>
+                                <div className="text-xs text-muted-foreground">
+                                  <span className="font-medium">Balance: </span>
+                                  <span className="font-semibold text-gray-700">{tx.balance_after?.toLocaleString()}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                )}
+              </ScrollArea>
+
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-4 mt-4">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => loadTransactionHistory(currentPage - 1)}
+                    disabled={currentPage <= 1 || historyRefreshing}
+                  >
+                    <ChevronLeft className="h-4 w-4 mr-1" />
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground min-w-[150px] text-center">
+                    Page {currentPage} of {totalPages} ({totalTransactions} total)
                   </span>
                   <Button
                     size="sm"
-                    variant="ghost"
-                    onClick={handleGetHistory}
-                    disabled={loading || historyRefreshing}
-                    title="Refresh history"
+                    variant="outline"
+                    onClick={() => loadTransactionHistory(currentPage + 1)}
+                    disabled={currentPage >= totalPages || historyRefreshing}
                   >
-                    <RefreshCw
-                      className="h-4 w-4"
-                      style={{
-                        animation: historyRefreshing ? "spin 0.6s ease-in-out" : "none",
-                        transition: "transform 0.2s",
-                      }}
-                    />
+                    Next
+                    <ChevronRight className="h-4 w-4 ml-1" />
                   </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {transactionHistory.length > 0 ? (
-                  <Table>
-                    <TableCaption>Recent credit transactions</TableCaption>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Amount</TableHead>
-                        <TableHead>Balance</TableHead>
-                        <TableHead>Description</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {transactionHistory.map((transaction) => (
-                        <TableRow key={transaction.id}>
-                          <TableCell className="text-sm">{new Date(transaction.created_at).toLocaleString()}</TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={transaction.type === "debit" ? "destructive" : "default"}
-                              className={transaction.type === "debit" ? "" : "bg-green-500 hover:bg-green-600"}
-                            >
-                              {transaction.type}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className={transaction.amount < 0 ? "text-destructive" : "text-green-600"}>
-                            {transaction.amount > 0 ? "+" : ""}
-                            {Math.abs(transaction.amount).toLocaleString()}
-                            {transaction.amount < 0 ? "-" : ""}
-                          </TableCell>
-                          <TableCell>
-                            {transaction.balance_after ? transaction.balance_after.toLocaleString() : "-"}
-                          </TableCell>
-                          <TableCell className="text-sm">{transaction.description || "-"}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Event Logs */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="text-xl">📋 Event Logs</span>
+                <Button size="sm" variant="outline" onClick={handleClearLogs}>
+                  Clear Logs
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ScrollArea className="h-[400px] rounded-lg border bg-gray-50 p-4 font-mono text-sm">
+                {logs.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">No logs yet</div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <History className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                    <p className="text-sm">No transactions yet</p>
-                    <p className="text-xs mt-1">Your transaction history will appear here</p>
+                  <div className="space-y-2">
+                    {logs.map((log) => (
+                      <div
+                        key={log.id}
+                        className={`p-3 rounded border-l-4 animate-in slide-in-from-left ${
+                          log.type === "success"
+                            ? "bg-emerald-50 border-l-emerald-500 text-emerald-900"
+                            : log.type === "error"
+                            ? "bg-red-50 border-l-red-500 text-red-900"
+                            : log.type === "warning"
+                            ? "bg-yellow-50 border-l-yellow-500 text-yellow-900"
+                            : "bg-blue-50 border-l-blue-500 text-blue-900"
+                        }`}
+                      >
+                        <span className="text-xs text-muted-foreground mr-2">
+                          [{log.timestamp.toLocaleTimeString()}]
+                        </span>
+                        <span dangerouslySetInnerHTML={{ __html: log.message }} />
+                      </div>
+                    ))}
                   </div>
                 )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Logout - Only show in standalone mode */}
-          {!isEmbedded && (
-            <Card>
-              <CardContent className="pt-6">
-                <Button onClick={logout} disabled={loading} variant="outline" className="w-full">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Logout
-                </Button>
-              </CardContent>
-            </Card>
-          )}
+              </ScrollArea>
+            </CardContent>
+          </Card>
         </div>
       )}
-
-      <div className="mt-6 text-center text-sm text-muted-foreground hidden">
-        Open browser console to see detailed responses
-      </div>
     </div>
   );
 }

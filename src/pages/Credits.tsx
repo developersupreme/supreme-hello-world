@@ -1,14 +1,9 @@
 import CreditSystemDemo from '@/components/CreditSystemDemo'
-import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
 
 export default function Credits() {
   return (
-    <div className="min-h-screen bg-gradient-hero">
-      <div className="container mx-auto px-4 py-8">
-        <CreditSystemDemo />
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      <CreditSystemDemo />
     </div>
   )
 }
