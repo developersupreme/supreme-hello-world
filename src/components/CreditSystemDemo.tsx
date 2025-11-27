@@ -278,8 +278,9 @@ export default function CreditSystemDemo() {
       await checkBalance();
       await loadTransactionHistory(1);
     } else {
-      log(`❌ Failed to add credits: ${result.error}`, "error");
-      toast.error(result.error || "Failed to add credits");
+      const errorMessage = result.message || result.error || "Failed to add credits";
+      log(`❌ Failed to add credits: ${errorMessage}`, "error");
+      toast.error(errorMessage);
     }
   };
 
@@ -518,15 +519,6 @@ export default function CreditSystemDemo() {
               <CardTitle className="text-xl">💰 Credit Operations</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Check Balance */}
-              <div className="pb-6 border-b">
-                <h3 className="text-lg font-semibold mb-3">Check Balance</h3>
-                <Button onClick={handleRefreshBalance} disabled={loading} className="bg-indigo-600 hover:bg-indigo-700">
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Refresh Balance
-                </Button>
-              </div>
-
               {/* Spend Credits */}
               <div className="pb-6 border-b">
                 <h3 className="text-lg font-semibold mb-3">Spend Credits</h3>
@@ -636,7 +628,7 @@ export default function CreditSystemDemo() {
                       return (
                         <Card
                           key={tx.id}
-                          className={`transition-all hover:shadow-lg hover:-translate-y-1 border-l-4 ${
+                          className={`transition-shadow hover:shadow-lg border-l-4 ${
                             isCredit ? "border-l-emerald-500 bg-gradient-to-r from-emerald-50 to-white" : "border-l-red-500 bg-gradient-to-r from-red-50 to-white"
                           }`}
                         >
@@ -678,13 +670,9 @@ export default function CreditSystemDemo() {
                                 </div>
                               </div>
                               <div className="text-right flex-shrink-0">
-                                <div className={`text-xl font-bold mb-1 ${isCredit ? "text-emerald-600" : "text-red-600"}`}>
+                                <div className={`text-xl font-bold ${isCredit ? "text-emerald-600" : "text-red-600"}`}>
                                   {isCredit ? "+" : "-"}
                                   {Math.abs(tx.amount).toLocaleString()}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  <span className="font-medium">Balance: </span>
-                                  <span className="font-semibold text-gray-700">{tx.balance_after?.toLocaleString()}</span>
                                 </div>
                               </div>
                             </div>
