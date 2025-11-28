@@ -340,7 +340,7 @@ export default function CreditSystemDemo() {
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-4xl font-bold mb-3 bg-gradient-to-r from-indigo-600 to-emerald-500 bg-clip-text text-transparent">
-          💳 Credit System
+          Credit System
         </h1>
         <div className="flex flex-wrap gap-2">
           <Badge
@@ -361,18 +361,18 @@ export default function CreditSystemDemo() {
           <CardTitle className="text-xl">🔐 Authentication Status</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-            <div className="bg-gray-50 rounded-lg p-3 border">
-              <div className="text-xs text-muted-foreground mb-1">Initialized:</div>
-              <div className="text-sm font-bold">{isAuthenticated !== undefined ? "✅" : "❌"}</div>
-            </div>
-            <div className="bg-gray-50 rounded-lg p-3 border">
-              <div className="text-xs text-muted-foreground mb-1">Authenticated:</div>
-              <div className="text-sm font-bold">{isAuthenticated ? "✅" : "❌"}</div>
-            </div>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <Badge variant="outline" className="text-xs">
+              Initialized: {isAuthenticated !== undefined ? "✅" : "❌"}
+            </Badge>
+            <Badge variant="outline" className="text-xs hover:bg-transparent cursor-default">
+              Authenticated: {isAuthenticated ? "✅" : "❌"}
+            </Badge>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gray-50 rounded-lg p-3 border">
               <div className="text-xs text-muted-foreground mb-1">User:</div>
-              <div className="text-sm font-bold truncate">{user?.email || "-"}</div>
+              <div className="text-sm font-bold break-all">{user?.email || "-"}</div>
             </div>
             <div className="bg-gray-50 rounded-lg p-3 border">
               <div className="text-xs text-muted-foreground mb-1">Organization:</div>
