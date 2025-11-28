@@ -159,7 +159,9 @@ export default function CreditSystemDemo() {
     const result = await getHistory(page, transactionsPerPage);
 
     if (result.success && result.transactions) {
-      setTransactionHistory(result.transactions);
+      // Sort transactions by ID in ascending order
+      const sortedTransactions = [...result.transactions].sort((a, b) => a.id - b.id);
+      setTransactionHistory(sortedTransactions);
       setCurrentPage(result.page || page);
       setTotalPages(result.pages || 1);
       setTotalTransactions(result.total || 0);
