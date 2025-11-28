@@ -548,7 +548,7 @@ export default function CreditSystemDemo() {
               </div>
 
               {/* Add Credits */}
-              <div className="pb-6 border-b">
+              <div>
                 <h3 className="text-lg font-semibold mb-3">Add Credits</h3>
                 <form onSubmit={handleAddCredits} className="space-y-3">
                   <div className="flex flex-wrap gap-3">
