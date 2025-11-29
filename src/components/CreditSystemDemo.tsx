@@ -159,8 +159,10 @@ export default function CreditSystemDemo() {
     const result = await getHistory(page, transactionsPerPage);
 
     if (result.success && result.transactions) {
-      // Sort transactions by ID in ascending order
-      const sortedTransactions = [...result.transactions].sort((a, b) => a.id - b.id);
+      // Sort transactions by created_at (newest first)
+      const sortedTransactions = [...result.transactions].sort((a, b) =>
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
       setTransactionHistory(sortedTransactions);
       setCurrentPage(result.page || page);
       setTotalPages(result.pages || 1);
@@ -320,6 +322,8 @@ export default function CreditSystemDemo() {
 
     if (debitTypes.includes(txType)) {
       return "Credit Spent";
+    } else if (txType === "cancelled") {
+      return "Cancelled";
     } else if (txType === "manual") {
       return "Credit Added (Manual)";
     } else if (txType === "bonus") {
@@ -333,7 +337,7 @@ export default function CreditSystemDemo() {
 
   // Check if transaction is credit
   const isTransactionCredit = (type: string) => {
-    const debitTypes = ["debit", "deduct", "spend", "spent"];
+    const debitTypes = ["debit", "deduct", "spend", "spent", "cancelled"];
     return !debitTypes.includes(type?.toLowerCase());
   };
 
@@ -673,7 +677,7 @@ export default function CreditSystemDemo() {
                               </div>
                               <div className="text-right flex-shrink-0">
                                 <div className={`text-xl font-bold ${isCredit ? "text-emerald-600" : "text-red-600"}`}>
-                                  {isCredit ? "+" : "-"}
+                                  {tx.type?.toLowerCase() === "cancelled" ? "" : isCredit ? "+" : "-"}
                                   {Math.abs(tx.amount).toLocaleString()}
                                 </div>
                               </div>
