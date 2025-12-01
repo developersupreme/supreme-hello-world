@@ -732,10 +732,11 @@ export default function CreditSystemDemo() {
                       onChange={(e) => setSpendAmount(e.target.value)}
                       min="1"
                       className="flex-1 min-w-[150px]"
+                      required
                     />
                     <Input
                       type="text"
-                      placeholder="Description (required)"
+                      placeholder="Description"
                       value={spendDescription}
                       onChange={(e) => setSpendDescription(e.target.value)}
                       className="flex-1 min-w-[200px]"
@@ -761,10 +762,11 @@ export default function CreditSystemDemo() {
                       onChange={(e) => setAddAmount(e.target.value)}
                       min="1"
                       className="flex-1 min-w-[150px]"
+                      required
                     />
                     <Input
                       type="text"
-                      placeholder="Description (required)"
+                      placeholder="Description"
                       value={addDescription}
                       onChange={(e) => setAddDescription(e.target.value)}
                       className="flex-1 min-w-[200px]"
