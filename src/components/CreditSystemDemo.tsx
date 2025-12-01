@@ -1,6 +1,18 @@
 import { useState, useEffect, useCallback } from "react";
 import { useCreditSystem, type Transaction } from "@supreme-ai/si-sdk";
 import { toast } from "sonner";
+
+// API configuration
+const API_BASE_URL = import.meta.env.VITE_SUPREME_AI_API_BASE_URL || "https://app.supremegroup.ai/api/secure-credits/jwt";
+const AUTH_URL = import.meta.env.VITE_SUPREME_AI_AUTH_URL || "https://app.supremegroup.ai/api/jwt";
+
+// User type for standalone mode
+type StandaloneUser = {
+  id: number;
+  name: string;
+  email: string;
+  organizations: { id: number; name: string }[];
+};
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,6 +68,14 @@ export default function CreditSystemDemo() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // Standalone mode state
+  const [standaloneMode, setStandaloneMode] = useState(false);
+  const [standaloneUser, setStandaloneUser] = useState<StandaloneUser | null>(null);
+  const [standaloneBalance, setStandaloneBalance] = useState<number | null>(null);
+  const [standaloneLoading, setStandaloneLoading] = useState(false);
+  const [standaloneAuthenticated, setStandaloneAuthenticated] = useState(false);
+  const [accessToken, setAccessToken] = useState<string | null>(null);
 
   // Organizations state for standalone mode
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -181,10 +201,251 @@ export default function CreditSystemDemo() {
 
   const isEmbedded = mode === "embedded";
 
-  // Tokens state for standalone mode API calls
-  const [accessToken, setAccessToken] = useState<string | null>(null);
+  // Storage key for standalone auth
+  const STANDALONE_AUTH_KEY = "standalone_auth";
 
-  // Helper function to set organization in cookie (for SDK to read)
+  // Save standalone auth to sessionStorage
+  const saveStandaloneAuth = (token: string, user: StandaloneUser, orgs: Organization[]) => {
+    try {
+      sessionStorage.setItem(STANDALONE_AUTH_KEY, JSON.stringify({ token, user, organizations: orgs }));
+    } catch (err) {
+      console.error("Failed to save standalone auth:", err);
+    }
+  };
+
+  // Clear standalone auth from sessionStorage
+  const clearStandaloneAuth = () => {
+    try {
+      sessionStorage.removeItem(STANDALONE_AUTH_KEY);
+    } catch (err) {
+      console.error("Failed to clear standalone auth:", err);
+    }
+  };
+
+  // Restore standalone auth from sessionStorage
+  const restoreStandaloneAuth = async () => {
+    try {
+      const stored = sessionStorage.getItem(STANDALONE_AUTH_KEY);
+      if (stored) {
+        const { token, user, organizations: orgs } = JSON.parse(stored);
+        if (token && user) {
+          setAccessToken(token);
+          setStandaloneUser(user);
+          setStandaloneAuthenticated(true);
+          if (orgs && Array.isArray(orgs)) {
+            setOrganizations(orgs);
+          }
+          log("🔄 Session restored", "info");
+
+          // Fetch balance for the selected organization
+          const selectedOrg = orgs?.find((org: Organization) => org.isSelected);
+          if (selectedOrg) {
+            const balanceResult = await standaloneCheckBalance(selectedOrg.id, token);
+            if (balanceResult.success) {
+              setBalanceLoaded(true);
+            }
+            // Load transaction history
+            await loadTransactionHistory(1, selectedOrg.id, token);
+          }
+          return true;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to restore standalone auth:", err);
+    }
+    return false;
+  };
+
+  // Detect standalone mode on mount (not in iframe) and restore session
+  useEffect(() => {
+    const inIframe = window !== window.parent;
+    setStandaloneMode(!inIframe);
+    if (!inIframe) {
+      log("🖥️ Running in standalone mode", "info");
+      // Restore session after a small delay to ensure state is ready
+      setTimeout(() => {
+        restoreStandaloneAuth();
+      }, 100);
+    }
+  }, []);
+
+  // Helper function to make authenticated API requests (standalone mode)
+  const apiRequest = async (endpoint: string, options: RequestInit = {}, token?: string) => {
+    const authToken = token || accessToken;
+    if (!authToken) {
+      return { success: false, error: "No access token" };
+    }
+    try {
+      const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers: {
+          "Authorization": `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          ...options.headers,
+        },
+      });
+      const data = await response.json();
+      return { success: response.ok && data.success, data: data.data, message: data.message, error: data.message };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  };
+
+  // Standalone mode: Login
+  const standaloneLogin = async (email: string, password: string) => {
+    setStandaloneLoading(true);
+    try {
+      const response = await fetch(`${AUTH_URL}/login`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await response.json();
+
+      if (response.ok && data.success && data.data) {
+        const { user: userData, tokens } = data.data;
+        setAccessToken(tokens.access_token);
+        setStandaloneUser(userData);
+        setStandaloneAuthenticated(true);
+
+        // Set organizations
+        let orgsWithSelection: Organization[] = [];
+        if (userData.organizations && Array.isArray(userData.organizations)) {
+          orgsWithSelection = userData.organizations.map(
+            (org: { id: number; name: string }, index: number) => ({
+              id: org.id,
+              name: org.name,
+              isSelected: index === 0,
+            })
+          );
+          setOrganizations(orgsWithSelection);
+        }
+
+        // Save to sessionStorage for persistence across page refresh
+        saveStandaloneAuth(tokens.access_token, userData, orgsWithSelection);
+
+        setStandaloneLoading(false);
+        return { success: true, user: userData, tokens };
+      } else {
+        setStandaloneLoading(false);
+        return { success: false, error: data.message || "Login failed" };
+      }
+    } catch (err: any) {
+      setStandaloneLoading(false);
+      return { success: false, error: err.message || "Network error" };
+    }
+  };
+
+  // Standalone mode: Logout
+  const standaloneLogout = async () => {
+    setAccessToken(null);
+    setStandaloneUser(null);
+    setStandaloneBalance(null);
+    setStandaloneAuthenticated(false);
+    setOrganizations([]);
+    setTransactionHistory([]);
+    clearStandaloneAuth();
+  };
+
+  // Standalone mode: Check Balance
+  const standaloneCheckBalance = async (orgId?: number, token?: string) => {
+    const organizationId = orgId ?? getSelectedOrganization()?.id;
+    if (!organizationId) {
+      return { success: false, error: "No organization selected" };
+    }
+
+    const result = await apiRequest(`/balance?organization_id=${organizationId}`, {}, token);
+    if (result.success && result.data) {
+      setStandaloneBalance(result.data.balance);
+      return { success: true, balance: result.data.balance };
+    }
+    return result;
+  };
+
+  // Standalone mode: Spend Credits
+  const standaloneSpendCredits = async (amount: number, description: string, orgId?: number) => {
+    const organizationId = orgId ?? getSelectedOrganization()?.id;
+    if (!organizationId) {
+      return { success: false, error: "No organization selected" };
+    }
+
+    const result = await apiRequest("/spend", {
+      method: "POST",
+      body: JSON.stringify({
+        organization_id: organizationId,
+        amount,
+        description,
+      }),
+    });
+
+    if (result.success) {
+      const newBalance = result.data?.new_balance ?? result.data?.balance ?? ((standaloneBalance ?? 0) - amount);
+      setStandaloneBalance(newBalance);
+      return { success: true, newBalance };
+    }
+    return result;
+  };
+
+  // Standalone mode: Add Credits
+  const standaloneAddCredits = async (amount: number, type: string, description: string, orgId?: number) => {
+    const organizationId = orgId ?? getSelectedOrganization()?.id;
+    if (!organizationId) {
+      return { success: false, error: "No organization selected" };
+    }
+
+    const result = await apiRequest("/add", {
+      method: "POST",
+      body: JSON.stringify({
+        organization_id: organizationId,
+        amount,
+        type,
+        description,
+      }),
+    });
+
+    if (result.success) {
+      const newBalance = result.data?.new_balance ?? result.data?.balance ?? ((standaloneBalance ?? 0) + amount);
+      setStandaloneBalance(newBalance);
+      return { success: true, newBalance };
+    }
+    return result;
+  };
+
+  // Standalone mode: Get History
+  const standaloneGetHistory = async (page: number, limit: number, orgId?: number, token?: string) => {
+    const organizationId = orgId ?? getSelectedOrganization()?.id;
+    if (!organizationId) {
+      return { success: false, error: "No organization selected" };
+    }
+
+    const offset = (page - 1) * limit;
+    const result = await apiRequest(`/history?organization_id=${organizationId}&limit=${limit}&offset=${offset}`, {}, token);
+
+    if (result.success && result.data) {
+      const pagination = result.data.pagination || {};
+      const total = pagination.total || 0;
+      const totalPages = Math.ceil(total / limit);
+      const transactions = (result.data.transactions || []).map((tx: any) => ({
+        id: tx.id,
+        type: tx.type,
+        amount: tx.amount,
+        description: tx.description || "",
+        reference_id: tx.reference_id,
+        created_at: tx.created_at,
+        balance_after: tx.balance_after || 0,
+        user_id: tx.user_id,
+      }));
+
+      return { success: true, transactions, total, page, pages: totalPages };
+    }
+    return result;
+  };
+
+  // Helper function to set organization in cookie (for SDK to read - embedded mode only)
   const setOrganizationCookie = (orgId: string | number) => {
     const cookieValue = String(orgId);
     document.cookie = `user-selected-org-id=${cookieValue}; path=/; max-age=31536000`;
@@ -249,64 +510,30 @@ export default function CreditSystemDemo() {
   }, [error]);
 
   // Load transaction history
-  const loadTransactionHistory = async (page: number = 1, organizationId?: number) => {
+  const loadTransactionHistory = async (page: number = 1, organizationId?: number, token?: string) => {
     setHistoryRefreshing(true);
     log(`📜 Loading transaction history (page ${page})...`, "info");
 
-    // In standalone mode, make direct API call with organization_id
-    if (!isEmbedded && accessToken) {
-      const orgId = organizationId ?? getSelectedOrganization()?.id;
-      if (orgId) {
-        try {
-          const apiBaseUrl = import.meta.env.VITE_SUPREME_AI_API_BASE_URL || "https://app.supremegroup.ai/api/secure-credits/jwt";
-          const offset = (page - 1) * transactionsPerPage;
-          const url = `${apiBaseUrl}/history?organization_id=${orgId}&limit=${transactionsPerPage}&offset=${offset}`;
-
-          const response = await fetch(url, {
-            method: "GET",
-            headers: {
-              "Authorization": `Bearer ${accessToken}`,
-              "Accept": "application/json",
-            },
-          });
-
-          const data = await response.json();
-
-          if (response.ok && data.success && data.data) {
-            const pagination = data.data.pagination || {};
-            const total = pagination.total || 0;
-            const totalPages = Math.ceil(total / transactionsPerPage);
-            const transactions = (data.data.transactions || []).map((tx: any) => ({
-              id: tx.id,
-              type: tx.type,
-              amount: tx.amount,
-              description: tx.description || "",
-              reference_id: tx.reference_id,
-              created_at: tx.created_at,
-              balance_after: tx.balance_after || 0,
-              user_id: tx.user_id,
-            }));
-
-            const sortedTransactions = [...transactions].sort((a: Transaction, b: Transaction) =>
-              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-            );
-            setTransactionHistory(sortedTransactions);
-            setCurrentPage(page);
-            setTotalPages(totalPages);
-            setTotalTransactions(total);
-            log(`✅ Loaded ${transactions.length} transactions (page ${page}/${totalPages})`, "success");
-          } else {
-            log(`❌ Failed to load transactions: ${data.message || "Unknown error"}`, "error");
-          }
-        } catch (err: any) {
-          log(`❌ Failed to load transactions: ${err.message}`, "error");
-        }
-        setTimeout(() => setHistoryRefreshing(false), 600);
-        return;
+    // Standalone mode: use direct API
+    if (standaloneMode && (standaloneAuthenticated || token)) {
+      const result = await standaloneGetHistory(page, transactionsPerPage, organizationId, token);
+      if (result.success && result.transactions) {
+        const sortedTransactions = [...result.transactions].sort((a: Transaction, b: Transaction) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        setTransactionHistory(sortedTransactions);
+        setCurrentPage(result.page || page);
+        setTotalPages(result.pages || 1);
+        setTotalTransactions(result.total || 0);
+        log(`✅ Loaded ${result.transactions.length} transactions (page ${result.page}/${result.pages})`, "success");
+      } else {
+        log(`❌ Failed to load transactions: ${result.error || "Unknown error"}`, "error");
       }
+      setTimeout(() => setHistoryRefreshing(false), 600);
+      return;
     }
 
-    // Use SDK for embedded mode
+    // Embedded mode: use SDK
     const result = await getHistory(page, transactionsPerPage);
 
     if (result.success && result.transactions) {
@@ -333,15 +560,41 @@ export default function CreditSystemDemo() {
       return;
     }
 
+    // Standalone mode: use direct API
+    if (standaloneMode) {
+      const result = await standaloneLogin(email, password);
+      if (result.success) {
+        log(`✅ Login successful! Welcome ${result.user?.email}`, "success");
+        log(`🔑 Access token stored`, "info");
+        log(`🏢 Loaded ${result.user?.organizations?.length || 0} organizations`, "info");
+
+        setEmail("");
+        setPassword("");
+
+        // Fetch balance after login - pass token directly since state may not be updated yet
+        const firstOrgId = result.user?.organizations?.[0]?.id;
+        const token = result.tokens?.access_token;
+        if (firstOrgId && token) {
+          const balanceResult = await standaloneCheckBalance(firstOrgId, token);
+          if (balanceResult.success) {
+            setBalanceLoaded(true);
+            log(`💰 Balance: ${balanceResult.balance?.toLocaleString()} credits`, "info");
+          }
+          // Load transaction history
+          await loadTransactionHistory(1, firstOrgId, token);
+        }
+      } else {
+        log(`❌ Login failed: ${result.error}`, "error");
+        toast.error(result.error || "Login failed");
+      }
+      return;
+    }
+
+    // Embedded mode: use SDK
     const result = await login(email, password);
     if (result.success) {
       log(`✅ Login successful! Welcome ${result.user?.email}`, "success");
       setBalanceLoaded(false);
-
-      // Store access token for standalone mode API calls
-      if (result.tokens?.access_token) {
-        setAccessToken(result.tokens.access_token);
-      }
 
       // Store organizations with isSelected property (first one selected by default)
       if (result.user?.organizations && Array.isArray(result.user.organizations)) {
@@ -349,7 +602,7 @@ export default function CreditSystemDemo() {
           (org: { id: number; name: string }, index: number) => ({
             id: org.id,
             name: org.name,
-            isSelected: index === 0, // Select first organization by default
+            isSelected: index === 0,
           })
         );
         setOrganizations(orgsWithSelection);
@@ -381,12 +634,12 @@ export default function CreditSystemDemo() {
   // Handle organization change
   const handleOrganizationChange = async (orgId: string) => {
     const selectedId = parseInt(orgId);
-    setOrganizations((prev) =>
-      prev.map((org) => ({
-        ...org,
-        isSelected: org.id === selectedId,
-      }))
-    );
+    const updatedOrgs = organizations.map((org) => ({
+      ...org,
+      isSelected: org.id === selectedId,
+    }));
+    setOrganizations(updatedOrgs);
+
     const selectedOrg = organizations.find((org) => org.id === selectedId);
     if (selectedOrg) {
       log(`🏢 Switching organization to: ${selectedOrg.name}...`, "info");
@@ -397,7 +650,26 @@ export default function CreditSystemDemo() {
       setTotalPages(1);
       setTotalTransactions(0);
 
-      // Set organization cookie for SDK
+      // Standalone mode: use direct API calls
+      if (standaloneMode && standaloneAuthenticated) {
+        log(`✅ Organization switched to: ${selectedOrg.name}`, "success");
+
+        // Update sessionStorage with new organization selection
+        if (accessToken && standaloneUser) {
+          saveStandaloneAuth(accessToken, standaloneUser, updatedOrgs);
+        }
+
+        // Refresh balance and history for the new organization
+        setBalanceLoaded(false);
+        const balanceResult = await standaloneCheckBalance(selectedId);
+        if (balanceResult.success) {
+          setBalanceLoaded(true);
+        }
+        await loadTransactionHistory(1, selectedId);
+        return;
+      }
+
+      // Embedded mode: use SDK with cookie
       setOrganizationCookie(orgId);
       log(`✅ Organization switched to: ${selectedOrg.name}`, "success");
 
@@ -433,6 +705,17 @@ export default function CreditSystemDemo() {
 
   // Handle logout
   const handleLogout = async () => {
+    // Standalone mode: use direct logout
+    if (standaloneMode) {
+      await standaloneLogout();
+      log("👋 Logged out successfully", "info");
+      setTransactionHistory([]);
+      setLogs([]);
+      setBalanceLoaded(false);
+      return;
+    }
+
+    // Embedded mode: use SDK
     await logout();
     log("👋 Logged out successfully", "info");
     setTransactionHistory([]);
@@ -456,10 +739,12 @@ export default function CreditSystemDemo() {
       return;
     }
 
-    if (balance === null || amount > balance) {
+    // Use appropriate balance based on mode
+    const currentBalance = standaloneMode ? standaloneBalance : balance;
+    if (currentBalance === null || amount > currentBalance) {
       setInsufficientBalanceError({
         show: true,
-        currentBalance: balance || 0,
+        currentBalance: currentBalance || 0,
         requested: amount,
       });
       return;
@@ -474,6 +759,38 @@ export default function CreditSystemDemo() {
     const selectedOrg = getSelectedOrganization();
 
     log(`💸 Spending ${amount} credits${selectedOrg ? ` for ${selectedOrg.name}` : ""}...`, "info");
+
+    // Standalone mode: use direct API call
+    if (standaloneMode && standaloneAuthenticated) {
+      if (!selectedOrg) {
+        log(`❌ No organization selected`, "error");
+        toast.error("No organization selected. Please select an organization.");
+        return;
+      }
+
+      const result = await standaloneSpendCredits(amount, description, selectedOrg.id);
+
+      if (result.success) {
+        log(`💸 Spent ${amount} credits. New balance: ${result.newBalance?.toLocaleString()}`, "success");
+        setSpendSuccess({
+          show: true,
+          amount: amount,
+          newBalance: result.newBalance || 0,
+        });
+        setSpendAmount("");
+        setSpendDescription("");
+        setBalanceLoaded(true);
+
+        // Refresh history
+        await loadTransactionHistory(1, selectedOrg.id);
+      } else {
+        log(`❌ Failed to spend credits: ${result.error}`, "error");
+        toast.error(result.error || "Failed to spend credits");
+      }
+      return;
+    }
+
+    // Embedded mode: use SDK
     const result = await spendCredits(amount, description);
 
     if (result.success) {
@@ -516,8 +833,8 @@ export default function CreditSystemDemo() {
       return;
     }
 
-    // Check if adding credits would exceed the maximum limit
-    const currentBalance = balance || 0;
+    // Use appropriate balance based on mode
+    const currentBalance = standaloneMode ? (standaloneBalance || 0) : (balance || 0);
     if (currentBalance + amount > MAX_CREDIT_LIMIT) {
       setCreditLimitError({
         show: true,
@@ -531,6 +848,38 @@ export default function CreditSystemDemo() {
     const selectedOrg = getSelectedOrganization();
 
     log(`➕ Adding ${amount} credits${selectedOrg ? ` for ${selectedOrg.name}` : ""}...`, "info");
+
+    // Standalone mode: use direct API call
+    if (standaloneMode && standaloneAuthenticated) {
+      if (!selectedOrg) {
+        log(`❌ No organization selected`, "error");
+        toast.error("No organization selected. Please select an organization.");
+        return;
+      }
+
+      const result = await standaloneAddCredits(amount, "manual", description, selectedOrg.id);
+
+      if (result.success) {
+        log(`➕ Added ${amount} credits. New balance: ${result.newBalance?.toLocaleString()}`, "success");
+        setAddSuccess({
+          show: true,
+          amount: amount,
+          newBalance: result.newBalance || 0,
+        });
+        setAddAmount("");
+        setAddDescription("");
+        setBalanceLoaded(true);
+
+        // Refresh history
+        await loadTransactionHistory(1, selectedOrg.id);
+      } else {
+        log(`❌ Failed to add credits: ${result.error}`, "error");
+        toast.error(result.error || "Failed to add credits");
+      }
+      return;
+    }
+
+    // Embedded mode: use SDK
     const result = await addCredits(amount, "manual", description);
 
     if (result.success) {
@@ -558,6 +907,20 @@ export default function CreditSystemDemo() {
     setBalanceRefreshing(true);
     log("📊 Checking balance...", "info");
 
+    // Standalone mode: use direct API
+    if (standaloneMode && standaloneAuthenticated) {
+      const result = await standaloneCheckBalance();
+      if (result.success) {
+        setBalanceLoaded(true);
+        log(`💰 Balance: ${result.balance?.toLocaleString()} credits`, "info");
+      } else {
+        log(`❌ Failed to check balance: ${result.error}`, "error");
+      }
+      setTimeout(() => setBalanceRefreshing(false), 600);
+      return;
+    }
+
+    // Embedded mode: use SDK
     const result = await checkBalance();
     if (result && result.success) {
       setBalanceLoaded(true);
@@ -612,6 +975,12 @@ export default function CreditSystemDemo() {
     return !debitTypes.includes(type?.toLowerCase());
   };
 
+  // Computed values based on mode (standalone vs embedded)
+  const effectiveIsAuthenticated = standaloneMode ? standaloneAuthenticated : isAuthenticated;
+  const effectiveUser = standaloneMode ? standaloneUser : user;
+  const effectiveBalance = standaloneMode ? standaloneBalance : balance;
+  const effectiveLoading = standaloneMode ? standaloneLoading : loading;
+
   return (
     <div className="container mx-auto p-4 md:p-6 max-w-7xl">
       {/* Header */}
@@ -626,8 +995,8 @@ export default function CreditSystemDemo() {
           >
             Mode: {isEmbedded ? "EMBEDDED" : "STANDALONE"}
           </Badge>
-          <Badge variant={isAuthenticated ? "default" : "outline"} className="text-sm">
-            {isAuthenticated ? "✅" : "❌"} {isAuthenticated ? "Authenticated" : "Not Authenticated"}
+          <Badge variant={effectiveIsAuthenticated ? "default" : "outline"} className="text-sm">
+            {effectiveIsAuthenticated ? "✅" : "❌"} {effectiveIsAuthenticated ? "Authenticated" : "Not Authenticated"}
           </Badge>
         </div>
       </div>
@@ -640,16 +1009,16 @@ export default function CreditSystemDemo() {
         <CardContent>
           <div className="flex flex-wrap gap-2 mb-4">
             <Badge variant="outline" className="text-xs">
-              Initialized: {isAuthenticated !== undefined ? "✅" : "❌"}
+              Initialized: {effectiveIsAuthenticated !== undefined ? "✅" : "❌"}
             </Badge>
             <Badge variant="outline" className="text-xs hover:bg-transparent cursor-default">
-              Authenticated: {isAuthenticated ? "✅" : "❌"}
+              Authenticated: {effectiveIsAuthenticated ? "✅" : "❌"}
             </Badge>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-gray-50 rounded-lg p-3 border">
               <div className="text-xs text-muted-foreground mb-1">User:</div>
-              <div className="text-sm font-bold break-all">{user?.email || "-"}</div>
+              <div className="text-sm font-bold break-all">{effectiveUser?.email || "-"}</div>
             </div>
             <div className="bg-gray-50 rounded-lg p-3 border">
               <div className="text-xs text-muted-foreground mb-1">Organization:</div>
@@ -657,13 +1026,13 @@ export default function CreditSystemDemo() {
             </div>
             <div className="bg-gray-50 rounded-lg p-3 border">
               <div className="text-xs text-muted-foreground mb-1">Balance:</div>
-              <div className="text-sm font-bold text-emerald-600">{balance?.toLocaleString() || 0}</div>
+              <div className="text-sm font-bold text-emerald-600">{effectiveBalance?.toLocaleString() || 0}</div>
             </div>
           </div>
         </CardContent>
       </Card>
 
-      {!isAuthenticated ? (
+      {!effectiveIsAuthenticated ? (
         <>
           {/* Embedded Mode Info */}
           {isEmbedded && (
@@ -702,7 +1071,7 @@ export default function CreditSystemDemo() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
                       required
-                      disabled={loading}
+                      disabled={effectiveLoading}
                     />
                   </div>
                   <div className="space-y-2">
@@ -715,7 +1084,7 @@ export default function CreditSystemDemo() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
-                        disabled={loading}
+                        disabled={effectiveLoading}
                       />
                       <Button
                         type="button"
@@ -730,8 +1099,8 @@ export default function CreditSystemDemo() {
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button type="submit" disabled={loading} className="w-full">
-                    {loading ? "Logging in..." : "Login"}
+                  <Button type="submit" disabled={effectiveLoading} className="w-full">
+                    {effectiveLoading ? "Logging in..." : "Login"}
                   </Button>
                 </CardFooter>
               </form>
@@ -752,11 +1121,11 @@ export default function CreditSystemDemo() {
               <CardContent className="space-y-4">
                 <div>
                   <span className="text-sm text-muted-foreground">Welcome,</span>
-                  <p className="text-lg font-semibold">{user?.name || user?.email}</p>
+                  <p className="text-lg font-semibold">{effectiveUser?.name || effectiveUser?.email}</p>
                 </div>
                 <div>
                   <span className="text-sm text-muted-foreground">User ID:</span>
-                  <p className="text-sm font-mono">{user?.id}</p>
+                  <p className="text-sm font-mono">{effectiveUser?.id}</p>
                 </div>
                 {/* Organization Selector for Standalone Mode */}
                 {!isEmbedded && organizations.length > 0 && (
@@ -796,7 +1165,7 @@ export default function CreditSystemDemo() {
                     size="sm"
                     variant="ghost"
                     onClick={handleRefreshBalance}
-                    disabled={loading || balanceRefreshing}
+                    disabled={effectiveLoading || balanceRefreshing}
                   >
                     <RefreshCw className={`h-4 w-4 ${balanceRefreshing ? "animate-spin" : ""}`} />
                   </Button>
@@ -804,10 +1173,10 @@ export default function CreditSystemDemo() {
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-emerald-600">
-                  {!balanceLoaded || balance === null ? (
+                  {!balanceLoaded || effectiveBalance == null ? (
                     <span className="text-2xl text-muted-foreground">Loading...</span>
                   ) : (
-                    `${balance.toLocaleString()} Credits`
+                    `${effectiveBalance.toLocaleString()} Credits`
                   )}
                 </div>
               </CardContent>
@@ -975,7 +1344,7 @@ export default function CreditSystemDemo() {
               {/* Logout */}
               {!isEmbedded && (
                 <div>
-                  <Button onClick={handleLogout} disabled={loading} variant="outline" className="w-full">
+                  <Button onClick={handleLogout} disabled={effectiveLoading} variant="outline" className="w-full">
                     <LogOut className="mr-2 h-4 w-4" />
                     Logout
                   </Button>
@@ -996,7 +1365,7 @@ export default function CreditSystemDemo() {
                   size="sm"
                   variant="ghost"
                   onClick={() => loadTransactionHistory(currentPage)}
-                  disabled={loading || historyRefreshing}
+                  disabled={effectiveLoading || historyRefreshing}
                 >
                   <RefreshCw className={`h-4 w-4 ${historyRefreshing ? "animate-spin" : ""}`} />
                 </Button>
