@@ -9,6 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   CreditCard,
   LogIn,
   LogOut,
@@ -27,6 +34,7 @@ import {
   Tag,
   AlertTriangle,
   X,
+  Building2,
 } from "lucide-react";
 
 // Event log entry type
@@ -37,10 +45,20 @@ type LogEntry = {
   timestamp: Date;
 };
 
+// Organization type for standalone mode
+type Organization = {
+  id: number;
+  name: string;
+  isSelected: boolean;
+};
+
 export default function CreditSystemDemo() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // Organizations state for standalone mode
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
 
   // Transaction history with pagination
   const [transactionHistory, setTransactionHistory] = useState<Transaction[]>([]);
@@ -154,7 +172,7 @@ export default function CreditSystemDemo() {
     debug: DEBUG,
     parentTimeout: 15000,
     tokenRefreshInterval: 600000,
-    balanceRefreshInterval: 0, // Manual refresh only
+    balanceRefreshInterval: 0,
     allowedOrigins: (import.meta.env.VITE_ALLOWED_PARENTS || "")
       .split(",")
       .map((domain) => domain.trim())
@@ -162,6 +180,15 @@ export default function CreditSystemDemo() {
   });
 
   const isEmbedded = mode === "embedded";
+
+  // Tokens state for standalone mode API calls
+  const [accessToken, setAccessToken] = useState<string | null>(null);
+
+  // Helper function to set organization in cookie (for SDK to read)
+  const setOrganizationCookie = (orgId: string | number) => {
+    const cookieValue = String(orgId);
+    document.cookie = `user-selected-org-id=${cookieValue}; path=/; max-age=31536000`;
+  };
 
   // Logging utility
   const log = useCallback((message: string, type: LogEntry["type"] = "info") => {
@@ -222,10 +249,64 @@ export default function CreditSystemDemo() {
   }, [error]);
 
   // Load transaction history
-  const loadTransactionHistory = async (page: number = 1) => {
+  const loadTransactionHistory = async (page: number = 1, organizationId?: number) => {
     setHistoryRefreshing(true);
     log(`📜 Loading transaction history (page ${page})...`, "info");
 
+    // In standalone mode, make direct API call with organization_id
+    if (!isEmbedded && accessToken) {
+      const orgId = organizationId ?? getSelectedOrganization()?.id;
+      if (orgId) {
+        try {
+          const apiBaseUrl = import.meta.env.VITE_SUPREME_AI_API_BASE_URL || "https://app.supremegroup.ai/api/secure-credits/jwt";
+          const offset = (page - 1) * transactionsPerPage;
+          const url = `${apiBaseUrl}/history?organization_id=${orgId}&limit=${transactionsPerPage}&offset=${offset}`;
+
+          const response = await fetch(url, {
+            method: "GET",
+            headers: {
+              "Authorization": `Bearer ${accessToken}`,
+              "Accept": "application/json",
+            },
+          });
+
+          const data = await response.json();
+
+          if (response.ok && data.success && data.data) {
+            const pagination = data.data.pagination || {};
+            const total = pagination.total || 0;
+            const totalPages = Math.ceil(total / transactionsPerPage);
+            const transactions = (data.data.transactions || []).map((tx: any) => ({
+              id: tx.id,
+              type: tx.type,
+              amount: tx.amount,
+              description: tx.description || "",
+              reference_id: tx.reference_id,
+              created_at: tx.created_at,
+              balance_after: tx.balance_after || 0,
+              user_id: tx.user_id,
+            }));
+
+            const sortedTransactions = [...transactions].sort((a: Transaction, b: Transaction) =>
+              new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+            );
+            setTransactionHistory(sortedTransactions);
+            setCurrentPage(page);
+            setTotalPages(totalPages);
+            setTotalTransactions(total);
+            log(`✅ Loaded ${transactions.length} transactions (page ${page}/${totalPages})`, "success");
+          } else {
+            log(`❌ Failed to load transactions: ${data.message || "Unknown error"}`, "error");
+          }
+        } catch (err: any) {
+          log(`❌ Failed to load transactions: ${err.message}`, "error");
+        }
+        setTimeout(() => setHistoryRefreshing(false), 600);
+        return;
+      }
+    }
+
+    // Use SDK for embedded mode
     const result = await getHistory(page, transactionsPerPage);
 
     if (result.success && result.transactions) {
@@ -257,6 +338,31 @@ export default function CreditSystemDemo() {
       log(`✅ Login successful! Welcome ${result.user?.email}`, "success");
       setBalanceLoaded(false);
 
+      // Store access token for standalone mode API calls
+      if (result.tokens?.access_token) {
+        setAccessToken(result.tokens.access_token);
+      }
+
+      // Store organizations with isSelected property (first one selected by default)
+      if (result.user?.organizations && Array.isArray(result.user.organizations)) {
+        const orgsWithSelection: Organization[] = result.user.organizations.map(
+          (org: { id: number; name: string }, index: number) => ({
+            id: org.id,
+            name: org.name,
+            isSelected: index === 0, // Select first organization by default
+          })
+        );
+        setOrganizations(orgsWithSelection);
+        log(`🏢 Loaded ${orgsWithSelection.length} organizations. Selected: ${orgsWithSelection[0]?.name}`, "info");
+      }
+
+      // Set organization cookie for SDK
+      const firstOrgId = result.user?.organizations?.[0]?.id;
+      if (firstOrgId) {
+        setOrganizationCookie(firstOrgId);
+        log(`🏢 Set organization: ${firstOrgId}`, "info");
+      }
+
       // Fetch balance after a short delay
       setTimeout(async () => {
         const balanceResult = await checkBalance();
@@ -272,11 +378,65 @@ export default function CreditSystemDemo() {
     }
   };
 
+  // Handle organization change
+  const handleOrganizationChange = async (orgId: string) => {
+    const selectedId = parseInt(orgId);
+    setOrganizations((prev) =>
+      prev.map((org) => ({
+        ...org,
+        isSelected: org.id === selectedId,
+      }))
+    );
+    const selectedOrg = organizations.find((org) => org.id === selectedId);
+    if (selectedOrg) {
+      log(`🏢 Switching organization to: ${selectedOrg.name}...`, "info");
+
+      // Clear transaction history immediately
+      setTransactionHistory([]);
+      setCurrentPage(1);
+      setTotalPages(1);
+      setTotalTransactions(0);
+
+      // Set organization cookie for SDK
+      setOrganizationCookie(orgId);
+      log(`✅ Organization switched to: ${selectedOrg.name}`, "success");
+
+      // Refresh balance and history for the new organization
+      setBalanceLoaded(false);
+      await checkBalance();
+      setBalanceLoaded(true);
+      // Pass the organization ID directly to avoid stale state
+      await loadTransactionHistory(1, selectedId);
+    }
+  };
+
+  // Get currently selected organization
+  const getSelectedOrganization = (): Organization | undefined => {
+    // For standalone mode, use local organizations state
+    if (organizations.length > 0) {
+      return organizations.find((org) => org.isSelected);
+    }
+    // For embedded mode, get from user object
+    if (user?.organizations && Array.isArray(user.organizations)) {
+      const userOrgs = user.organizations as any[];
+      const selectedOrg = userOrgs.find((org: any) => org.selectedStatus === true);
+      if (selectedOrg) {
+        return { id: selectedOrg.id, name: selectedOrg.name, isSelected: true };
+      }
+      // If no selectedStatus, return first org
+      if (userOrgs.length > 0) {
+        return { id: userOrgs[0].id, name: userOrgs[0].name, isSelected: true };
+      }
+    }
+    return undefined;
+  };
+
   // Handle logout
   const handleLogout = async () => {
     await logout();
     log("👋 Logged out successfully", "info");
     setTransactionHistory([]);
+    setOrganizations([]);
     setLogs([]);
   };
 
@@ -311,8 +471,9 @@ export default function CreditSystemDemo() {
     }
 
     const description = spendDescription.trim();
+    const selectedOrg = getSelectedOrganization();
 
-    log(`💸 Spending ${amount} credits...`, "info");
+    log(`💸 Spending ${amount} credits${selectedOrg ? ` for ${selectedOrg.name}` : ""}...`, "info");
     const result = await spendCredits(amount, description);
 
     if (result.success) {
@@ -367,8 +528,9 @@ export default function CreditSystemDemo() {
     }
 
     const description = addDescription.trim();
+    const selectedOrg = getSelectedOrganization();
 
-    log(`➕ Adding ${amount} credits...`, "info");
+    log(`➕ Adding ${amount} credits${selectedOrg ? ` for ${selectedOrg.name}` : ""}...`, "info");
     const result = await addCredits(amount, "manual", description);
 
     if (result.success) {
@@ -412,9 +574,15 @@ export default function CreditSystemDemo() {
 
   // Get organization name
   const getOrganizationName = () => {
+    // For standalone mode, use local organizations state
+    if (organizations.length > 0) {
+      const selectedOrg = organizations.find((org) => org.isSelected);
+      return selectedOrg?.name || "-";
+    }
+    // For embedded mode, use user.organizations with selectedStatus
     if (!user?.organizations) return "-";
-    const organizations = user.organizations as any[];
-    const selectedOrg = organizations?.find((org: any) => org.selectedStatus === true);
+    const userOrgs = user.organizations as any[];
+    const selectedOrg = userOrgs?.find((org: any) => org.selectedStatus === true);
     return selectedOrg?.name || "-";
   };
 
@@ -581,7 +749,7 @@ export default function CreditSystemDemo() {
                   User Information
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-2">
+              <CardContent className="space-y-4">
                 <div>
                   <span className="text-sm text-muted-foreground">Welcome,</span>
                   <p className="text-lg font-semibold">{user?.name || user?.email}</p>
@@ -590,6 +758,30 @@ export default function CreditSystemDemo() {
                   <span className="text-sm text-muted-foreground">User ID:</span>
                   <p className="text-sm font-mono">{user?.id}</p>
                 </div>
+                {/* Organization Selector for Standalone Mode */}
+                {!isEmbedded && organizations.length > 0 && (
+                  <div>
+                    <Label className="text-sm text-muted-foreground flex items-center gap-1 mb-2">
+                      <Building2 className="h-4 w-4" />
+                      Organization
+                    </Label>
+                    <Select
+                      value={getSelectedOrganization()?.id.toString()}
+                      onValueChange={handleOrganizationChange}
+                    >
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select organization" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {organizations.map((org) => (
+                          <SelectItem key={org.id} value={org.id.toString()}>
+                            {org.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
