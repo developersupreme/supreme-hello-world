@@ -25,6 +25,8 @@ import {
   ChevronRight,
   Calendar,
   Tag,
+  AlertTriangle,
+  X,
 } from "lucide-react";
 
 // Event log entry type
@@ -57,6 +59,74 @@ export default function CreditSystemDemo() {
   const [spendDescription, setSpendDescription] = useState("");
   const [addAmount, setAddAmount] = useState("");
   const [addDescription, setAddDescription] = useState("");
+
+  // Credit limit error state
+  const [creditLimitError, setCreditLimitError] = useState<{
+    show: boolean;
+    currentBalance: number;
+    requested: number;
+  } | null>(null);
+  const MAX_CREDIT_LIMIT = 25000;
+
+  // Insufficient balance error state
+  const [insufficientBalanceError, setInsufficientBalanceError] = useState<{
+    show: boolean;
+    currentBalance: number;
+    requested: number;
+  } | null>(null);
+
+  // Success message states
+  const [spendSuccess, setSpendSuccess] = useState<{
+    show: boolean;
+    amount: number;
+    newBalance: number;
+  } | null>(null);
+
+  const [addSuccess, setAddSuccess] = useState<{
+    show: boolean;
+    amount: number;
+    newBalance: number;
+  } | null>(null);
+
+  // Auto-dismiss credit limit error after 3 seconds
+  useEffect(() => {
+    if (creditLimitError?.show) {
+      const timer = setTimeout(() => {
+        setCreditLimitError(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [creditLimitError]);
+
+  // Auto-dismiss insufficient balance error after 3 seconds
+  useEffect(() => {
+    if (insufficientBalanceError?.show) {
+      const timer = setTimeout(() => {
+        setInsufficientBalanceError(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [insufficientBalanceError]);
+
+  // Auto-dismiss spend success after 3 seconds
+  useEffect(() => {
+    if (spendSuccess?.show) {
+      const timer = setTimeout(() => {
+        setSpendSuccess(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [spendSuccess]);
+
+  // Auto-dismiss add success after 3 seconds
+  useEffect(() => {
+    if (addSuccess?.show) {
+      const timer = setTimeout(() => {
+        setAddSuccess(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [addSuccess]);
 
   // Event logs
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -227,7 +297,11 @@ export default function CreditSystemDemo() {
     }
 
     if (balance === null || amount > balance) {
-      toast.error("Insufficient balance");
+      setInsufficientBalanceError({
+        show: true,
+        currentBalance: balance || 0,
+        requested: amount,
+      });
       return;
     }
 
@@ -243,7 +317,11 @@ export default function CreditSystemDemo() {
 
     if (result.success) {
       log(`💸 Spent ${amount} credits. New balance: ${result.newBalance?.toLocaleString()}`, "success");
-      toast.success(`Successfully spent ${amount} credits`);
+      setSpendSuccess({
+        show: true,
+        amount: amount,
+        newBalance: result.newBalance || 0,
+      });
       setSpendAmount("");
       setSpendDescription("");
 
@@ -277,6 +355,17 @@ export default function CreditSystemDemo() {
       return;
     }
 
+    // Check if adding credits would exceed the maximum limit
+    const currentBalance = balance || 0;
+    if (currentBalance + amount > MAX_CREDIT_LIMIT) {
+      setCreditLimitError({
+        show: true,
+        currentBalance: currentBalance,
+        requested: amount,
+      });
+      return;
+    }
+
     const description = addDescription.trim();
 
     log(`➕ Adding ${amount} credits...`, "info");
@@ -284,7 +373,11 @@ export default function CreditSystemDemo() {
 
     if (result.success) {
       log(`➕ Added ${amount} credits. New balance: ${result.newBalance?.toLocaleString()}`, "success");
-      toast.success(`Successfully added ${amount} credits`);
+      setAddSuccess({
+        show: true,
+        amount: amount,
+        newBalance: result.newBalance || 0,
+      });
       setAddAmount("");
       setAddDescription("");
 
@@ -530,9 +623,101 @@ export default function CreditSystemDemo() {
           </div>
 
           {/* Credit Operations */}
-          <Card>
+          <Card className="relative">
             <CardHeader>
               <CardTitle className="text-xl">💰 Credit Operations</CardTitle>
+              {/* Credit Limit Error Popup */}
+              {creditLimitError?.show && (
+                <div className="absolute top-4 right-4 z-50 max-w-md animate-in slide-in-from-top-2 fade-in duration-300">
+                  <div className="bg-red-50 border border-red-200 rounded-lg shadow-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0">
+                        <AlertTriangle className="h-5 w-5 text-red-500" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-red-800">
+                          Cannot add credits. The total balance would exceed the maximum allowed limit of {MAX_CREDIT_LIMIT.toLocaleString()} credits. Current balance: {creditLimitError.currentBalance.toLocaleString()}, Requested: {creditLimitError.requested.toLocaleString()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setCreditLimitError(null)}
+                        className="flex-shrink-0 text-red-400 hover:text-red-600 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Insufficient Balance Error Popup */}
+              {insufficientBalanceError?.show && (
+                <div className="absolute top-4 right-4 z-50 max-w-md animate-in slide-in-from-top-2 fade-in duration-300">
+                  <div className="bg-red-50 border border-red-200 rounded-lg shadow-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0">
+                        <AlertTriangle className="h-5 w-5 text-red-500" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-red-800">
+                          Insufficient balance. You don't have enough credits to complete this transaction. Current balance: {insufficientBalanceError.currentBalance.toLocaleString()}, Requested: {insufficientBalanceError.requested.toLocaleString()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setInsufficientBalanceError(null)}
+                        className="flex-shrink-0 text-red-400 hover:text-red-600 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Spend Success Popup */}
+              {spendSuccess?.show && (
+                <div className="absolute top-4 right-4 z-50 max-w-md animate-in slide-in-from-top-2 fade-in duration-300">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg shadow-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-emerald-800">
+                          Successfully spent {spendSuccess.amount.toLocaleString()} credits. New balance: {spendSuccess.newBalance.toLocaleString()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setSpendSuccess(null)}
+                        className="flex-shrink-0 text-emerald-400 hover:text-emerald-600 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              {/* Add Success Popup */}
+              {addSuccess?.show && (
+                <div className="absolute top-4 right-4 z-50 max-w-md animate-in slide-in-from-top-2 fade-in duration-300">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-lg shadow-lg p-4">
+                    <div className="flex items-start gap-3">
+                      <div className="flex-shrink-0">
+                        <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-emerald-800">
+                          Successfully added {addSuccess.amount.toLocaleString()} credits. New balance: {addSuccess.newBalance.toLocaleString()}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setAddSuccess(null)}
+                        className="flex-shrink-0 text-emerald-400 hover:text-emerald-600 transition-colors"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="space-y-6">
               {/* Spend Credits */}
