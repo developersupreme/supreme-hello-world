@@ -1344,7 +1344,7 @@ export default function CreditSystemDemo() {
               {/* Logout */}
               {!isEmbedded && (
                 <div>
-                  <Button onClick={handleLogout} disabled={effectiveLoading} variant="outline" className="w-auto px-8">
+                  <Button onClick={handleLogout} disabled={effectiveLoading} className="w-auto px-8 bg-red-500 hover:bg-red-600 text-white">
                     <LogOut className="mr-2 h-4 w-4" />
                     Logout
                   </Button>
