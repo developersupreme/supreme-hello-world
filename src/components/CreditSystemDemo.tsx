@@ -231,7 +231,12 @@ export default function CreditSystemDemo() {
       return;
     }
 
-    const description = spendDescription.trim() || undefined;
+    if (!spendDescription || spendDescription.trim() === "") {
+      toast.error("Please enter a description");
+      return;
+    }
+
+    const description = spendDescription.trim();
 
     log(`💸 Spending ${amount} credits...`, "info");
     const result = await spendCredits(amount, description);
@@ -267,7 +272,12 @@ export default function CreditSystemDemo() {
       return;
     }
 
-    const description = addDescription.trim() || undefined;
+    if (!addDescription || addDescription.trim() === "") {
+      toast.error("Please enter a description");
+      return;
+    }
+
+    const description = addDescription.trim();
 
     log(`➕ Adding ${amount} credits...`, "info");
     const result = await addCredits(amount, "manual", description);
@@ -540,10 +550,11 @@ export default function CreditSystemDemo() {
                     />
                     <Input
                       type="text"
-                      placeholder="Description (optional)"
+                      placeholder="Description (required)"
                       value={spendDescription}
                       onChange={(e) => setSpendDescription(e.target.value)}
                       className="flex-1 min-w-[200px]"
+                      required
                     />
                     <Button type="submit" variant="destructive" className="flex-shrink-0">
                       <Minus className="mr-2 h-4 w-4" />
@@ -568,10 +579,11 @@ export default function CreditSystemDemo() {
                     />
                     <Input
                       type="text"
-                      placeholder="Description (optional)"
+                      placeholder="Description (required)"
                       value={addDescription}
                       onChange={(e) => setAddDescription(e.target.value)}
                       className="flex-1 min-w-[200px]"
+                      required
                     />
                     <Button type="submit" className="flex-shrink-0 bg-emerald-600 hover:bg-emerald-700">
                       <Plus className="mr-2 h-4 w-4" />
