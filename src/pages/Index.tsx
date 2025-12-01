@@ -23,19 +23,10 @@ const Index = () => {
         </p>
         
         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-          <Link to="/auth">
-            <Button
-              size="lg"
-              className="bg-gradient-primary hover:opacity-90 shadow-premium text-lg px-8"
-            >
-              See User Details
-            </Button>
-          </Link>
           <Link to="/credits">
             <Button
               size="lg"
-              variant="outline"
-              className="border-2 text-lg px-8"
+              className="bg-gradient-primary hover:opacity-90 shadow-premium text-lg px-8"
             >
               Credit System
             </Button>
