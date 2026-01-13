@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { useCreditSystem, type Transaction } from "@supreme-ai/si-sdk";
+import { useCreditSystem, type Transaction, type Agent } from "@supreme-ai/si-sdk";
 import { toast } from "sonner";
 
 // API configuration
@@ -47,6 +47,7 @@ import {
   AlertTriangle,
   X,
   Building2,
+  Bot,
 } from "lucide-react";
 
 // Event log entry type
@@ -86,6 +87,11 @@ export default function CreditSystemDemo() {
   const [totalPages, setTotalPages] = useState(1);
   const [totalTransactions, setTotalTransactions] = useState(0);
   const transactionsPerPage = 10;
+
+  // AI Agents state
+  const [allAgents, setAllAgents] = useState<Agent[]>([]);
+  const [filteredAgents, setFilteredAgents] = useState<Agent[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
 
   // Loading states
   const [balanceLoaded, setBalanceLoaded] = useState(false);
@@ -185,6 +191,7 @@ export default function CreditSystemDemo() {
     spendCredits,
     addCredits,
     getHistory,
+    getAgents,
   } = useCreditSystem({
     apiBaseUrl: import.meta.env.VITE_SUPREME_AI_API_BASE_URL || "https://app.supremegroup.ai/api/secure-credits/jwt",
     authUrl: import.meta.env.VITE_SUPREME_AI_AUTH_URL || "https://app.supremegroup.ai/api/jwt",
@@ -246,6 +253,8 @@ export default function CreditSystemDemo() {
             }
             // Load transaction history
             await loadTransactionHistory(1, selectedOrg.id, token);
+            // Load AI agents
+            await loadAgents(selectedOrg.id, user?.userRoleIds || user?.user_role_ids, token);
           }
           return true;
         }
@@ -445,6 +454,55 @@ export default function CreditSystemDemo() {
     return result;
   };
 
+  // Standalone mode: Get AI Agents
+  const standaloneGetAgents = async (all: boolean = false, orgId?: number, roleIds?: number[], token?: string) => {
+    const organizationId = orgId ?? getSelectedOrganization()?.id;
+    if (!organizationId) {
+      return { success: false, error: "No organization selected", agents: [] };
+    }
+
+    let queryParams = `organization_id=${organizationId}`;
+    if (all) {
+      queryParams += "&all=true";
+    } else if (roleIds && roleIds.length > 0) {
+      queryParams += `&role_ids=${roleIds.join(",")}`;
+    }
+
+    const result = await apiRequest(`/ai-agents?${queryParams}`, {}, token);
+
+    if (result.success && result.data) {
+      // Handle various response structures
+      let agents: any[] = [];
+
+      if (Array.isArray(result.data)) {
+        agents = result.data;
+      } else if (result.data.agents) {
+        // Handle nested agents structure: { agents: { all: [...] } } or { agents: { "15": [...] } }
+        if (all && Array.isArray(result.data.agents.all)) {
+          // For all=true, agents are under "all" key
+          agents = result.data.agents.all;
+        } else if (Array.isArray(result.data.agents)) {
+          // Direct array: { agents: [...] }
+          agents = result.data.agents;
+        } else if (typeof result.data.agents === "object") {
+          // For role-specific, agents are under role ID keys: { agents: { "15": [...], "16": [...] } }
+          // Flatten all arrays from the object
+          const agentObj = result.data.agents;
+          Object.keys(agentObj).forEach((key) => {
+            if (Array.isArray(agentObj[key])) {
+              agents = agents.concat(agentObj[key]);
+            }
+          });
+        }
+      } else if (Array.isArray(result.data.data)) {
+        agents = result.data.data;
+      }
+
+      return { success: true, agents, total: agents.length };
+    }
+    return { ...result, agents: [] };
+  };
+
   // Helper function to set organization in cookie (for SDK to read - embedded mode only)
   const setOrganizationCookie = (orgId: string | number) => {
     const cookieValue = String(orgId);
@@ -487,6 +545,8 @@ export default function CreditSystemDemo() {
       log(`✅ SDK ready in ${mode} mode! User: ${user.email}`, "success");
       // Auto-load transaction history
       loadTransactionHistory(1);
+      // Auto-load AI agents
+      loadAgents();
     } else if (isAuthenticated === false) {
       log("🔑 Authentication required - please login", "warning");
     }
@@ -553,6 +613,85 @@ export default function CreditSystemDemo() {
     setTimeout(() => setHistoryRefreshing(false), 600);
   };
 
+  // Load AI Agents (both all and filtered)
+  const loadAgents = async (organizationId?: number, roleIds?: number[], token?: string) => {
+    setAgentsLoading(true);
+    log("🤖 Loading AI agents...", "info");
+
+    // Standalone mode: use direct API
+    if (standaloneMode && (standaloneAuthenticated || token)) {
+      // Get user role IDs from session storage if not provided
+      let userRoleIds = roleIds;
+      if (!userRoleIds) {
+        try {
+          const stored = sessionStorage.getItem(STANDALONE_AUTH_KEY);
+          if (stored) {
+            const { user } = JSON.parse(stored);
+            // Try to get role IDs from user data
+            userRoleIds = user?.userRoleIds || user?.user_role_ids || [];
+          }
+        } catch (err) {
+          console.error("Failed to get role IDs:", err);
+        }
+      }
+
+      // Fetch all agents
+      const allResult = await standaloneGetAgents(true, organizationId, undefined, token);
+      if (allResult.success && allResult.agents) {
+        const agents = Array.isArray(allResult.agents) ? allResult.agents : [];
+        setAllAgents(agents);
+        log(`✅ Loaded ${agents.length} total agents (all=true)`, "success");
+      } else {
+        setAllAgents([]);
+        log(`❌ Failed to load all agents: ${allResult.error || "Unknown error"}`, "error");
+      }
+
+      // Fetch filtered agents (by role IDs)
+      if (userRoleIds && userRoleIds.length > 0) {
+        const filteredResult = await standaloneGetAgents(false, organizationId, userRoleIds, token);
+        if (filteredResult.success && filteredResult.agents) {
+          const agents = Array.isArray(filteredResult.agents) ? filteredResult.agents : [];
+          setFilteredAgents(agents);
+          log(`✅ Loaded ${agents.length} filtered agents (role_ids: ${userRoleIds.join(",")})`, "success");
+        } else {
+          setFilteredAgents([]);
+          log(`❌ Failed to load filtered agents: ${filteredResult.error || "Unknown error"}`, "error");
+        }
+      } else {
+        setFilteredAgents([]);
+        log("⚠️ No role IDs available for filtered agents", "warning");
+      }
+
+      setAgentsLoading(false);
+      return;
+    }
+
+    // Embedded mode: use SDK
+    // Fetch all agents
+    const allResult = await getAgents(true);
+    if (allResult.success && allResult.agents) {
+      const agents = Array.isArray(allResult.agents) ? allResult.agents : [];
+      setAllAgents(agents);
+      log(`✅ Loaded ${agents.length} total agents (all=true)`, "success");
+    } else {
+      setAllAgents([]);
+      log(`❌ Failed to load all agents: ${allResult.error || "Unknown error"}`, "error");
+    }
+
+    // Fetch filtered agents
+    const filteredResult = await getAgents(false);
+    if (filteredResult.success && filteredResult.agents) {
+      const agents = Array.isArray(filteredResult.agents) ? filteredResult.agents : [];
+      setFilteredAgents(agents);
+      log(`✅ Loaded ${agents.length} filtered agents (by role IDs)`, "success");
+    } else {
+      setFilteredAgents([]);
+      log(`❌ Failed to load filtered agents: ${filteredResult.error || "Unknown error"}`, "error");
+    }
+
+    setAgentsLoading(false);
+  };
+
   // Handle login
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -582,6 +721,8 @@ export default function CreditSystemDemo() {
           }
           // Load transaction history
           await loadTransactionHistory(1, firstOrgId, token);
+          // Load AI agents
+          await loadAgents(firstOrgId, result.user?.userRoleIds || result.user?.user_role_ids, token);
         }
       } else {
         log(`❌ Login failed: ${result.error}`, "error");
@@ -666,6 +807,8 @@ export default function CreditSystemDemo() {
           setBalanceLoaded(true);
         }
         await loadTransactionHistory(1, selectedId);
+        // Reload agents for the new organization
+        await loadAgents(selectedId);
         return;
       }
 
@@ -679,6 +822,8 @@ export default function CreditSystemDemo() {
       setBalanceLoaded(true);
       // Pass the organization ID directly to avoid stale state
       await loadTransactionHistory(1, selectedId);
+      // Reload agents for the new organization
+      await loadAgents();
     }
   };
 
@@ -1476,6 +1621,135 @@ export default function CreditSystemDemo() {
                   </Button>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* AI Agents */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Bot className="h-5 w-5" />
+                  🤖 AI Agents
+                </span>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => loadAgents()}
+                  disabled={agentsLoading}
+                >
+                  <RefreshCw className={`h-4 w-4 ${agentsLoading ? "animate-spin" : ""}`} />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-6 md:grid-cols-2">
+                {/* All Agents (with all=true) */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                    <Badge variant="secondary" className="bg-blue-100 text-blue-800">all=true</Badge>
+                    All Organization Agents
+                  </h3>
+                  <ScrollArea className="h-[300px] rounded-lg border bg-gray-50 p-4">
+                    {agentsLoading ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <RefreshCw className="h-8 w-8 mx-auto mb-2 animate-spin opacity-50" />
+                        <p>Loading agents...</p>
+                      </div>
+                    ) : allAgents.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Bot className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                        <p>No agents found</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {allAgents.map((agent) => (
+                          <div
+                            key={agent.id}
+                            className="p-3 bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center">
+                                <Bot className="h-5 w-5 text-white" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-900 truncate">{agent.name}</p>
+                                {agent.description && (
+                                  <p className="text-sm text-gray-500 line-clamp-2">{agent.description}</p>
+                                )}
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Badge variant="outline" className="text-xs">ID: {agent.id}</Badge>
+                                  {agent.status && (
+                                    <Badge variant={agent.status === "active" ? "default" : "secondary"} className="text-xs">
+                                      {agent.status}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Total: {allAgents.length} agents
+                  </p>
+                </div>
+
+                {/* Filtered Agents (by role IDs) */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
+                    <Badge variant="secondary" className="bg-emerald-100 text-emerald-800">role_ids</Badge>
+                    Your Role's Agents
+                  </h3>
+                  <ScrollArea className="h-[300px] rounded-lg border bg-gray-50 p-4">
+                    {agentsLoading ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <RefreshCw className="h-8 w-8 mx-auto mb-2 animate-spin opacity-50" />
+                        <p>Loading agents...</p>
+                      </div>
+                    ) : filteredAgents.length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <Bot className="h-12 w-12 mx-auto mb-2 opacity-30" />
+                        <p>No agents found for your roles</p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {filteredAgents.map((agent) => (
+                          <div
+                            key={agent.id}
+                            className="p-3 bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow"
+                          >
+                            <div className="flex items-start gap-3">
+                              <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                                <Bot className="h-5 w-5 text-white" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-900 truncate">{agent.name}</p>
+                                {agent.description && (
+                                  <p className="text-sm text-gray-500 line-clamp-2">{agent.description}</p>
+                                )}
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Badge variant="outline" className="text-xs">ID: {agent.id}</Badge>
+                                  {agent.status && (
+                                    <Badge variant={agent.status === "active" ? "default" : "secondary"} className="text-xs">
+                                      {agent.status}
+                                    </Badge>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </ScrollArea>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Total: {filteredAgents.length} agents (filtered by your role IDs)
+                  </p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
