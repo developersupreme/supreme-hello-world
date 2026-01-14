@@ -525,8 +525,9 @@ export default function CreditSystemDemo() {
         agents = result.data;
       } else if (result.data.agents) {
         // Handle nested agents structure: { agents: { all: [...] } } or { agents: { "2": { role_name: "CEO", agents: [...] } } }
-        if (all && Array.isArray(result.data.agents.all)) {
-          // For all=true, agents are under "all" key
+        // Note: Admin/superadmin users get "all" format even without passing all=true
+        if (Array.isArray(result.data.agents.all)) {
+          // Agents are under "all" key (admin/superadmin response or all=true)
           agents = result.data.agents.all;
         } else if (Array.isArray(result.data.agents)) {
           // Direct array: { agents: [...] }
