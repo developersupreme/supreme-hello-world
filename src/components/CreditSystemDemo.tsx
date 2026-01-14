@@ -35,6 +35,7 @@ type AgentsResult = {
 
 // API configuration
 const API_BASE_URL = import.meta.env.VITE_SUPREME_AI_API_BASE_URL || "https://app.supremegroup.ai/api/secure-credits/jwt";
+const AGENTS_API_BASE_URL = import.meta.env.VITE_SUPREME_AI_AGENTS_API_BASE_URL || "https://app.supremegroup.ai/api/ai-agents/jwt";
 const AUTH_URL = import.meta.env.VITE_SUPREME_AI_AUTH_URL || "https://app.supremegroup.ai/api/jwt";
 
 // User type for standalone mode
@@ -227,6 +228,7 @@ export default function CreditSystemDemo() {
     getAgents,
   } = useCreditSystem({
     apiBaseUrl: import.meta.env.VITE_SUPREME_AI_API_BASE_URL || "https://app.supremegroup.ai/api/secure-credits/jwt",
+    agentsApiBaseUrl: import.meta.env.VITE_SUPREME_AI_AGENTS_API_BASE_URL || "https://app.supremegroup.ai/api/ai-agents/jwt",
     authUrl: import.meta.env.VITE_SUPREME_AI_AUTH_URL || "https://app.supremegroup.ai/api/jwt",
     autoInit: true,
     debug: DEBUG,
@@ -319,6 +321,29 @@ export default function CreditSystemDemo() {
     }
     try {
       const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+        ...options,
+        headers: {
+          "Authorization": `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+          ...options.headers,
+        },
+      });
+      const data = await response.json();
+      return { success: response.ok && data.success, data: data.data, message: data.message, error: data.message };
+    } catch (err: any) {
+      return { success: false, error: err.message };
+    }
+  };
+
+  // Helper function to make authenticated API requests for agents (standalone mode)
+  const agentsApiRequest = async (endpoint: string, options: RequestInit = {}, token?: string) => {
+    const authToken = token || accessToken;
+    if (!authToken) {
+      return { success: false, error: "No access token" };
+    }
+    try {
+      const response = await fetch(`${AGENTS_API_BASE_URL}${endpoint}`, {
         ...options,
         headers: {
           "Authorization": `Bearer ${authToken}`,
@@ -501,7 +526,7 @@ export default function CreditSystemDemo() {
       queryParams += `&role_ids=${roleIds.join(",")}`;
     }
 
-    const result = await apiRequest(`/ai-agents?${queryParams}`, {}, token);
+    const result = await agentsApiRequest(`?${queryParams}`, {}, token);
 
     if (DEBUG) {
       console.log("[standaloneGetAgents] API Response:", result);
