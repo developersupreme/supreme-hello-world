@@ -91,6 +91,8 @@ export default function CreditSystemDemo() {
   // AI Agents state
   const [allAgents, setAllAgents] = useState<Agent[]>([]);
   const [filteredAgents, setFilteredAgents] = useState<Agent[]>([]);
+  // Role-grouped agents: { roleId: { role_name: string, agents: Agent[] } }
+  const [roleGroupedAgents, setRoleGroupedAgents] = useState<Record<string, { role_name: string; agents: Agent[] }>>({});
   const [agentsLoading, setAgentsLoading] = useState(false);
 
   // Loading states
@@ -458,7 +460,7 @@ export default function CreditSystemDemo() {
   const standaloneGetAgents = async (all: boolean = false, orgId?: number, roleIds?: number[], token?: string) => {
     const organizationId = orgId ?? getSelectedOrganization()?.id;
     if (!organizationId) {
-      return { success: false, error: "No organization selected", agents: [] };
+      return { success: false, error: "No organization selected", agents: [], roleGrouped: {} };
     }
 
     let queryParams = `organization_id=${organizationId}`;
@@ -470,27 +472,65 @@ export default function CreditSystemDemo() {
 
     const result = await apiRequest(`/ai-agents?${queryParams}`, {}, token);
 
+    if (DEBUG) {
+      console.log("[standaloneGetAgents] API Response:", result);
+    }
+
     if (result.success && result.data) {
       // Handle various response structures
       let agents: any[] = [];
+      let roleGrouped: Record<string, { role_name: string; agents: any[] }> = {};
+
+      // Debug: Log the structure we received
+      console.log("[standaloneGetAgents] result.data structure:", {
+        isArray: Array.isArray(result.data),
+        hasAgents: !!result.data.agents,
+        agentsType: result.data.agents ? typeof result.data.agents : "undefined",
+        agentsIsArray: Array.isArray(result.data.agents),
+        agentsKeys: result.data.agents && typeof result.data.agents === "object" ? Object.keys(result.data.agents) : []
+      });
 
       if (Array.isArray(result.data)) {
         agents = result.data;
       } else if (result.data.agents) {
-        // Handle nested agents structure: { agents: { all: [...] } } or { agents: { "15": [...] } }
+        // Handle nested agents structure: { agents: { all: [...] } } or { agents: { "2": { role_name: "CEO", agents: [...] } } }
         if (all && Array.isArray(result.data.agents.all)) {
           // For all=true, agents are under "all" key
           agents = result.data.agents.all;
         } else if (Array.isArray(result.data.agents)) {
           // Direct array: { agents: [...] }
           agents = result.data.agents;
-        } else if (typeof result.data.agents === "object") {
-          // For role-specific, agents are under role ID keys: { agents: { "15": [...], "16": [...] } }
-          // Flatten all arrays from the object
+        } else if (typeof result.data.agents === "object" && !Array.isArray(result.data.agents)) {
+          // For role-specific or default (no all=true), agents are under role ID keys with role_name and agents array
+          // Format: { agents: { "2": { role_name: "CEO", agents: [...] }, "3": { role_name: "Manager", agents: [...] } } }
           const agentObj = result.data.agents;
-          Object.keys(agentObj).forEach((key) => {
-            if (Array.isArray(agentObj[key])) {
-              agents = agents.concat(agentObj[key]);
+          const keys = Object.keys(agentObj);
+          console.log("[standaloneGetAgents] Processing role keys:", keys);
+
+          keys.forEach((roleId) => {
+            // Skip "all" key which is for all=true response
+            if (roleId === "all") return;
+
+            const roleData = agentObj[roleId];
+            console.log(`[standaloneGetAgents] Role ${roleId}:`, {
+              hasRoleName: !!roleData?.role_name,
+              roleName: roleData?.role_name,
+              hasAgents: !!roleData?.agents,
+              agentsCount: roleData?.agents?.length
+            });
+
+            if (roleData && typeof roleData === "object") {
+              // Check if it's the new format with role_name and agents
+              if (roleData.role_name && Array.isArray(roleData.agents)) {
+                roleGrouped[roleId] = {
+                  role_name: roleData.role_name,
+                  agents: roleData.agents
+                };
+                agents = agents.concat(roleData.agents);
+              } else if (Array.isArray(roleData)) {
+                // Old format: direct array under role ID
+                agents = agents.concat(roleData);
+              }
             }
           });
         }
@@ -498,9 +538,15 @@ export default function CreditSystemDemo() {
         agents = result.data.data;
       }
 
-      return { success: true, agents, total: agents.length };
+      console.log("[standaloneGetAgents] Final result:", {
+        agentsCount: agents.length,
+        roleGroupedKeys: Object.keys(roleGrouped),
+        roleGroupedCount: Object.keys(roleGrouped).length
+      });
+
+      return { success: true, agents, total: agents.length, roleGrouped };
     }
-    return { ...result, agents: [] };
+    return { ...result, agents: [], roleGrouped: {} };
   };
 
   // Helper function to set organization in cookie (for SDK to read - embedded mode only)
@@ -646,20 +692,25 @@ export default function CreditSystemDemo() {
         log(`❌ Failed to load all agents: ${allResult.error || "Unknown error"}`, "error");
       }
 
-      // Fetch filtered agents (by role IDs)
-      if (userRoleIds && userRoleIds.length > 0) {
-        const filteredResult = await standaloneGetAgents(false, organizationId, userRoleIds, token);
-        if (filteredResult.success && filteredResult.agents) {
-          const agents = Array.isArray(filteredResult.agents) ? filteredResult.agents : [];
-          setFilteredAgents(agents);
-          log(`✅ Loaded ${agents.length} filtered agents (role_ids: ${userRoleIds.join(",")})`, "success");
+      // Fetch filtered agents (by role IDs or without all=true to get user's role agents)
+      // If we have role IDs, use them; otherwise just call without all=true to get role-based agents
+      const filteredResult = await standaloneGetAgents(false, organizationId, userRoleIds && userRoleIds.length > 0 ? userRoleIds : undefined, token);
+      if (filteredResult.success && filteredResult.agents) {
+        const agents = Array.isArray(filteredResult.agents) ? filteredResult.agents : [];
+        setFilteredAgents(agents);
+        // Store role-grouped agents if available
+        if (filteredResult.roleGrouped && Object.keys(filteredResult.roleGrouped).length > 0) {
+          setRoleGroupedAgents(filteredResult.roleGrouped);
+          const roleCount = Object.keys(filteredResult.roleGrouped).length;
+          log(`✅ Loaded ${agents.length} filtered agents across ${roleCount} roles`, "success");
         } else {
-          setFilteredAgents([]);
-          log(`❌ Failed to load filtered agents: ${filteredResult.error || "Unknown error"}`, "error");
+          setRoleGroupedAgents({});
+          log(`✅ Loaded ${agents.length} filtered agents`, "success");
         }
       } else {
         setFilteredAgents([]);
-        log("⚠️ No role IDs available for filtered agents", "warning");
+        setRoleGroupedAgents({});
+        log(`❌ Failed to load filtered agents: ${filteredResult.error || "Unknown error"}`, "error");
       }
 
       setAgentsLoading(false);
@@ -678,14 +729,26 @@ export default function CreditSystemDemo() {
       log(`❌ Failed to load all agents: ${allResult.error || "Unknown error"}`, "error");
     }
 
-    // Fetch filtered agents
+    // Fetch filtered agents - SDK now returns roleGrouped data
     const filteredResult = await getAgents(false);
-    if (filteredResult.success && filteredResult.agents) {
+    console.log("[loadAgents] SDK filteredResult:", filteredResult);
+
+    if (filteredResult.success) {
       const agents = Array.isArray(filteredResult.agents) ? filteredResult.agents : [];
       setFilteredAgents(agents);
-      log(`✅ Loaded ${agents.length} filtered agents (by role IDs)`, "success");
+
+      // SDK now returns roleGrouped directly
+      if (filteredResult.roleGrouped && Object.keys(filteredResult.roleGrouped).length > 0) {
+        setRoleGroupedAgents(filteredResult.roleGrouped as Record<string, { role_name: string; agents: Agent[] }>);
+        const roleCount = Object.keys(filteredResult.roleGrouped).length;
+        log(`✅ Loaded ${agents.length} filtered agents across ${roleCount} roles`, "success");
+      } else {
+        setRoleGroupedAgents({});
+        log(`✅ Loaded ${agents.length} filtered agents (by role IDs)`, "success");
+      }
     } else {
       setFilteredAgents([]);
+      setRoleGroupedAgents({});
       log(`❌ Failed to load filtered agents: ${filteredResult.error || "Unknown error"}`, "error");
     }
 
@@ -1697,7 +1760,7 @@ export default function CreditSystemDemo() {
                   </p>
                 </div>
 
-                {/* Filtered Agents (by role IDs) */}
+                {/* Filtered Agents (by role IDs) - Grouped by Role */}
                 <div>
                   <h3 className="text-lg font-semibold mb-3 flex items-center gap-2">
                     <Badge variant="secondary" className="bg-emerald-100 text-emerald-800">role_ids</Badge>
@@ -1714,7 +1777,56 @@ export default function CreditSystemDemo() {
                         <Bot className="h-12 w-12 mx-auto mb-2 opacity-30" />
                         <p>No agents found for your roles</p>
                       </div>
+                    ) : Object.keys(roleGroupedAgents).length > 0 ? (
+                      // Display agents grouped by role
+                      <div className="space-y-4">
+                        {Object.entries(roleGroupedAgents).map(([roleId, roleData]) => (
+                          <div key={roleId} className="space-y-2">
+                            {/* Role Header */}
+                            <div className="sticky top-0 bg-gray-100 p-2 rounded-lg border-l-4 border-emerald-500 z-10">
+                              <div className="flex items-center gap-2">
+                                <Badge variant="outline" className="text-xs bg-white">Role ID: {roleId}</Badge>
+                                <span className="font-semibold text-emerald-800">{roleData.role_name}</span>
+                                <Badge variant="secondary" className="text-xs ml-auto">
+                                  {roleData.agents.length} agent{roleData.agents.length !== 1 ? 's' : ''}
+                                </Badge>
+                              </div>
+                            </div>
+                            {/* Agents under this role */}
+                            <div className="space-y-2 pl-2">
+                              {roleData.agents.map((agent) => (
+                                <div
+                                  key={agent.id}
+                                  className="p-3 bg-white rounded-lg border shadow-sm hover:shadow-md transition-shadow"
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                                      <Bot className="h-5 w-5 text-white" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-semibold text-gray-900 truncate">{agent.name}</p>
+                                      {(agent.short_desc || agent.description) && (
+                                        <p className="text-sm text-gray-500 line-clamp-2">{agent.short_desc || agent.description}</p>
+                                      )}
+                                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                                        <Badge variant="outline" className="text-xs">ID: {agent.id}</Badge>
+                                        {agent.grant_type && (
+                                          <Badge variant="secondary" className="text-xs">{agent.grant_type}</Badge>
+                                        )}
+                                        {agent.is_default && (
+                                          <Badge className="text-xs bg-amber-100 text-amber-800">Default</Badge>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     ) : (
+                      // Fallback to flat list if role-grouped data is not available
                       <div className="space-y-2">
                         {filteredAgents.map((agent) => (
                           <div
@@ -1746,7 +1858,8 @@ export default function CreditSystemDemo() {
                     )}
                   </ScrollArea>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Total: {filteredAgents.length} agents (filtered by your role IDs)
+                    Total: {filteredAgents.length} agents
+                    {Object.keys(roleGroupedAgents).length > 0 && ` across ${Object.keys(roleGroupedAgents).length} role(s)`}
                   </p>
                 </div>
               </div>
