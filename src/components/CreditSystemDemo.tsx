@@ -227,7 +227,12 @@ export default function CreditSystemDemo() {
     getHistory,
     getAgents,
   } = useCreditSystem({
-    apiBaseUrl: import.meta.env.VITE_SUPREME_AI_API_BASE_URL || "https://app.supremegroup.ai/api/secure-credits/jwt",
+    apiBaseUrl:
+      import.meta.env.VITE_SUPREME_AI_API_BASE_URL ||
+      "https://app.supremegroup.ai/api/secure-credits/jwt",
+    agentsApiBaseUrl:
+      import.meta.env.VITE_SUPREME_AI_AGENTS_API_BASE_URL ||
+      "https://app.supremegroup.ai/api/ai-agents/jwt",
     authUrl: import.meta.env.VITE_SUPREME_AI_AUTH_URL || "https://app.supremegroup.ai/api/jwt",
     autoInit: true,
     debug: DEBUG,
