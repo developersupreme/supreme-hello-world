@@ -1,6 +1,37 @@
 import { useState, useEffect, useCallback } from "react";
-import { useCreditSystem, type Transaction, type Agent } from "@supreme-ai/si-sdk";
+import { useCreditSystem } from "@supreme-ai/si-sdk";
+import type { Transaction, HistoryResult, BalanceResult, SpendResult, AddResult } from "@supreme-ai/si-sdk";
 import { toast } from "sonner";
+
+// Local type definitions for Agent (not exported from SDK)
+type Agent = {
+  id: number;
+  name: string;
+  description?: string;
+  short_desc?: string;
+  assistant_id?: string;
+  is_default?: boolean;
+  grant_type?: string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: any;
+};
+
+type RoleGroupedAgents = {
+  [roleId: string]: {
+    role_name: string;
+    agents: Agent[];
+  };
+};
+
+type AgentsResult = {
+  success: boolean;
+  error?: string;
+  agents?: Agent[];
+  roleGrouped?: RoleGroupedAgents;
+  total?: number;
+};
 
 // API configuration
 const API_BASE_URL = import.meta.env.VITE_SUPREME_AI_API_BASE_URL || "https://app.supremegroup.ai/api/secure-credits/jwt";
@@ -623,17 +654,17 @@ export default function CreditSystemDemo() {
     // Standalone mode: use direct API
     if (standaloneMode && (standaloneAuthenticated || token)) {
       const result = await standaloneGetHistory(page, transactionsPerPage, organizationId, token);
-      if (result.success && result.transactions) {
+      if (result.success && 'transactions' in result && result.transactions) {
         const sortedTransactions = [...result.transactions].sort((a: Transaction, b: Transaction) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
         setTransactionHistory(sortedTransactions);
-        setCurrentPage(result.page || page);
-        setTotalPages(result.pages || 1);
-        setTotalTransactions(result.total || 0);
-        log(`✅ Loaded ${result.transactions.length} transactions (page ${result.page}/${result.pages})`, "success");
+        setCurrentPage('page' in result ? result.page : page);
+        setTotalPages('pages' in result ? result.pages : 1);
+        setTotalTransactions('total' in result ? result.total : 0);
+        log(`✅ Loaded ${result.transactions.length} transactions (page ${'page' in result ? result.page : page}/${'pages' in result ? result.pages : 1})`, "success");
       } else {
-        log(`❌ Failed to load transactions: ${result.error || "Unknown error"}`, "error");
+        log(`❌ Failed to load transactions: ${'error' in result ? result.error : "Unknown error"}`, "error");
       }
       setTimeout(() => setHistoryRefreshing(false), 600);
       return;
@@ -683,24 +714,24 @@ export default function CreditSystemDemo() {
 
       // Fetch all agents
       const allResult = await standaloneGetAgents(true, organizationId, undefined, token);
-      if (allResult.success && allResult.agents) {
+      if (allResult.success && 'agents' in allResult && allResult.agents) {
         const agents = Array.isArray(allResult.agents) ? allResult.agents : [];
         setAllAgents(agents);
         log(`✅ Loaded ${agents.length} total agents (all=true)`, "success");
       } else {
         setAllAgents([]);
-        log(`❌ Failed to load all agents: ${allResult.error || "Unknown error"}`, "error");
+        log(`❌ Failed to load all agents: ${'error' in allResult ? allResult.error : "Unknown error"}`, "error");
       }
 
       // Fetch filtered agents (by role IDs or without all=true to get user's role agents)
       // If we have role IDs, use them; otherwise just call without all=true to get role-based agents
       const filteredResult = await standaloneGetAgents(false, organizationId, userRoleIds && userRoleIds.length > 0 ? userRoleIds : undefined, token);
-      if (filteredResult.success && filteredResult.agents) {
+      if (filteredResult.success && 'agents' in filteredResult && filteredResult.agents) {
         const agents = Array.isArray(filteredResult.agents) ? filteredResult.agents : [];
         setFilteredAgents(agents);
         // Store role-grouped agents if available
-        if (filteredResult.roleGrouped && Object.keys(filteredResult.roleGrouped).length > 0) {
-          setRoleGroupedAgents(filteredResult.roleGrouped);
+        if ('roleGrouped' in filteredResult && filteredResult.roleGrouped && Object.keys(filteredResult.roleGrouped).length > 0) {
+          setRoleGroupedAgents(filteredResult.roleGrouped as Record<string, { role_name: string; agents: Agent[] }>);
           const roleCount = Object.keys(filteredResult.roleGrouped).length;
           log(`✅ Loaded ${agents.length} filtered agents across ${roleCount} roles`, "success");
         } else {
@@ -710,7 +741,7 @@ export default function CreditSystemDemo() {
       } else {
         setFilteredAgents([]);
         setRoleGroupedAgents({});
-        log(`❌ Failed to load filtered agents: ${filteredResult.error || "Unknown error"}`, "error");
+        log(`❌ Failed to load filtered agents: ${'error' in filteredResult ? filteredResult.error : "Unknown error"}`, "error");
       }
 
       setAgentsLoading(false);
@@ -778,7 +809,7 @@ export default function CreditSystemDemo() {
         const token = result.tokens?.access_token;
         if (firstOrgId && token) {
           const balanceResult = await standaloneCheckBalance(firstOrgId, token);
-          if (balanceResult.success) {
+          if (balanceResult.success && 'balance' in balanceResult) {
             setBalanceLoaded(true);
             log(`💰 Balance: ${balanceResult.balance?.toLocaleString()} credits`, "info");
           }
@@ -803,9 +834,9 @@ export default function CreditSystemDemo() {
       // Store organizations with isSelected property (first one selected by default)
       if (result.user?.organizations && Array.isArray(result.user.organizations)) {
         const orgsWithSelection: Organization[] = result.user.organizations.map(
-          (org: { id: number; name: string }, index: number) => ({
-            id: org.id,
-            name: org.name,
+          (org, index) => ({
+            id: typeof org.id === 'string' ? parseInt(org.id, 10) : (org.id as number) || 0,
+            name: org.name || '',
             isSelected: index === 0,
           })
         );
@@ -978,7 +1009,7 @@ export default function CreditSystemDemo() {
 
       const result = await standaloneSpendCredits(amount, description, selectedOrg.id);
 
-      if (result.success) {
+      if (result.success && 'newBalance' in result) {
         log(`💸 Spent ${amount} credits. New balance: ${result.newBalance?.toLocaleString()}`, "success");
         setSpendSuccess({
           show: true,
@@ -992,8 +1023,9 @@ export default function CreditSystemDemo() {
         // Refresh history
         await loadTransactionHistory(1, selectedOrg.id);
       } else {
-        log(`❌ Failed to spend credits: ${result.error}`, "error");
-        toast.error(result.error || "Failed to spend credits");
+        const errorMsg = 'error' in result ? result.error : "Unknown error";
+        log(`❌ Failed to spend credits: ${errorMsg}`, "error");
+        toast.error(errorMsg || "Failed to spend credits");
       }
       return;
     }
@@ -1067,7 +1099,7 @@ export default function CreditSystemDemo() {
 
       const result = await standaloneAddCredits(amount, "manual", description, selectedOrg.id);
 
-      if (result.success) {
+      if (result.success && 'newBalance' in result) {
         log(`➕ Added ${amount} credits. New balance: ${result.newBalance?.toLocaleString()}`, "success");
         setAddSuccess({
           show: true,
@@ -1081,8 +1113,9 @@ export default function CreditSystemDemo() {
         // Refresh history
         await loadTransactionHistory(1, selectedOrg.id);
       } else {
-        log(`❌ Failed to add credits: ${result.error}`, "error");
-        toast.error(result.error || "Failed to add credits");
+        const errorMsg = 'error' in result ? result.error : "Unknown error";
+        log(`❌ Failed to add credits: ${errorMsg}`, "error");
+        toast.error(errorMsg || "Failed to add credits");
       }
       return;
     }
@@ -1104,7 +1137,7 @@ export default function CreditSystemDemo() {
       await checkBalance();
       await loadTransactionHistory(1);
     } else {
-      const errorMessage = result.message || result.error || "Failed to add credits";
+      const errorMessage = result.error || "Failed to add credits";
       log(`❌ Failed to add credits: ${errorMessage}`, "error");
       toast.error(errorMessage);
     }
@@ -1118,11 +1151,12 @@ export default function CreditSystemDemo() {
     // Standalone mode: use direct API
     if (standaloneMode && standaloneAuthenticated) {
       const result = await standaloneCheckBalance();
-      if (result.success) {
+      if (result.success && 'balance' in result) {
         setBalanceLoaded(true);
         log(`💰 Balance: ${result.balance?.toLocaleString()} credits`, "info");
       } else {
-        log(`❌ Failed to check balance: ${result.error}`, "error");
+        const errorMsg = 'error' in result ? result.error : "Unknown error";
+        log(`❌ Failed to check balance: ${errorMsg}`, "error");
       }
       setTimeout(() => setBalanceRefreshing(false), 600);
       return;
